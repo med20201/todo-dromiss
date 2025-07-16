@@ -1,45 +1,73 @@
-import React from 'react';
-import { BarChart3, TrendingUp, Download, Calendar, Users, CheckSquare } from 'lucide-react';
-import { tasks, projects, teamMembers } from '../data/mockData';
+import React, { useEffect, useState } from 'react'
+import { BarChart3, TrendingUp, Download, Calendar, Users, CheckSquare } from 'lucide-react'
+
+type Task = {
+  id: string
+  status: string
+  assigned_to: string | number
+}
+
+type TeamMember = {
+  id: string | number
+  name: string
+  department?: string
+}
+
+type Project = {
+  id: string
+  status: string
+}
 
 const Rapports: React.FC = () => {
-  // Calculate statistics
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(task => task.status === 'completed').length;
-  const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
-  const todoTasks = tasks.filter(task => task.status === 'todo').length;
-  
-  const completionRate = Math.round((completedTasks / totalTasks) * 100);
-  
-  // Team productivity
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
+
+  useEffect(() => {
+    // غير الرابط حسب مكان ملف db.json الخاص بك
+    fetch('/db.json')
+      .then(res => res.json())
+      .then(data => {
+        setTasks(data.tasks || [])
+        setTeamMembers(data.users || [])
+        setProjects(data.projects || [])
+      })
+      .catch(err => console.error('Error loading data:', err))
+  }, [])
+
+  // حساب إحصائيات المهام
+  const totalTasks = tasks.length
+  const completedTasks = tasks.filter(t => t.status === 'completed').length
+  const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length
+  const todoTasks = tasks.filter(t => t.status === 'todo').length
+  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+
+  // إنتاجية كل عضو في الفريق
   const teamProductivity = teamMembers.map(member => {
-    const memberTasks = tasks.filter(task => task.assignedTo === member.id);
-    const memberCompletedTasks = memberTasks.filter(task => task.status === 'completed');
+    const memberTasks = tasks.filter(task => task.assigned_to == member.id)
+    const memberCompleted = memberTasks.filter(task => task.status === 'completed')
     return {
       name: member.name,
       total: memberTasks.length,
-      completed: memberCompletedTasks.length,
-      rate: memberTasks.length > 0 ? Math.round((memberCompletedTasks.length / memberTasks.length) * 100) : 0
-    };
-  });
+      completed: memberCompleted.length,
+      rate: memberTasks.length > 0 ? Math.round((memberCompleted.length / memberTasks.length) * 100) : 0,
+    }
+  })
 
-  // Department statistics
-  const departments = [...new Set(teamMembers.map(member => member.department))];
+  // إحصائيات الأقسام
+  const departments = Array.from(new Set(teamMembers.map(m => m.department).filter(Boolean))) as string[]
   const departmentStats = departments.map(dept => {
-    const deptMembers = teamMembers.filter(member => member.department === dept);
-    const deptTasks = tasks.filter(task => 
-      deptMembers.some(member => member.id === task.assignedTo)
-    );
-    const deptCompletedTasks = deptTasks.filter(task => task.status === 'completed');
-    
+    const deptMembers = teamMembers.filter(m => m.department === dept)
+    const deptTasks = tasks.filter(task => deptMembers.some(m => m.id == task.assigned_to))
+    const deptCompleted = deptTasks.filter(task => task.status === 'completed')
     return {
       name: dept,
       members: deptMembers.length,
       tasks: deptTasks.length,
-      completed: deptCompletedTasks.length,
-      rate: deptTasks.length > 0 ? Math.round((deptCompletedTasks.length / deptTasks.length) * 100) : 0
-    };
-  });
+      completed: deptCompleted.length,
+      rate: deptTasks.length > 0 ? Math.round((deptCompleted.length / deptTasks.length) * 100) : 0,
+    }
+  })
 
   return (
     <div className="space-y-6">
@@ -99,9 +127,7 @@ const Rapports: React.FC = () => {
             </div>
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Projets Actifs</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {projects.filter(p => p.status === 'active').length}
-              </p>
+              <p className="text-2xl font-bold text-gray-900">{projects.filter(p => p.status === 'active').length}</p>
             </div>
           </div>
         </div>
@@ -114,6 +140,7 @@ const Rapports: React.FC = () => {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* ToDo Tasks */}
             <div className="text-center">
               <div className="w-24 h-24 mx-auto mb-4 relative">
                 <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
@@ -124,12 +151,14 @@ const Rapports: React.FC = () => {
                 </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-gray-600 h-2 rounded-full"
-                  style={{ width: `${(todoTasks / totalTasks) * 100}%` }}
+                  style={{ width: `${totalTasks ? (todoTasks / totalTasks) * 100 : 0}%` }}
                 ></div>
               </div>
             </div>
+
+            {/* In Progress Tasks */}
             <div className="text-center">
               <div className="w-24 h-24 mx-auto mb-4 relative">
                 <div className="w-24 h-24 rounded-full bg-blue-200 flex items-center justify-center">
@@ -140,12 +169,14 @@ const Rapports: React.FC = () => {
                 </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-blue-600 h-2 rounded-full"
-                  style={{ width: `${(inProgressTasks / totalTasks) * 100}%` }}
+                  style={{ width: `${totalTasks ? (inProgressTasks / totalTasks) * 100 : 0}%` }}
                 ></div>
               </div>
             </div>
+
+            {/* Completed Tasks */}
             <div className="text-center">
               <div className="w-24 h-24 mx-auto mb-4 relative">
                 <div className="w-24 h-24 rounded-full bg-green-200 flex items-center justify-center">
@@ -156,9 +187,9 @@ const Rapports: React.FC = () => {
                 </div>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
+                <div
                   className="bg-green-600 h-2 rounded-full"
-                  style={{ width: `${(completedTasks / totalTasks) * 100}%` }}
+                  style={{ width: `${totalTasks ? (completedTasks / totalTasks) * 100 : 0}%` }}
                 ></div>
               </div>
             </div>
@@ -166,15 +197,15 @@ const Rapports: React.FC = () => {
         </div>
       </div>
 
-      {/* Team Productivity */}
+      {/* Productivity per member */}
       <div className="bg-white rounded-lg shadow-md border border-gray-100">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">Productivité par Membre</h2>
         </div>
         <div className="p-6">
           <div className="space-y-4">
-            {teamProductivity.map((member, index) => (
-              <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            {teamProductivity.map((member, idx) => (
+              <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex-1">
                   <h3 className="font-medium text-gray-900">{member.name}</h3>
                   <p className="text-sm text-gray-600">
@@ -183,14 +214,12 @@ const Rapports: React.FC = () => {
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="w-32 bg-gray-200 rounded-full h-2">
-                    <div 
+                    <div
                       className="bg-blue-600 h-2 rounded-full"
                       style={{ width: `${member.rate}%` }}
                     ></div>
                   </div>
-                  <span className="text-sm font-medium text-gray-900 w-12 text-right">
-                    {member.rate}%
-                  </span>
+                  <span className="text-sm font-medium text-gray-900 w-12 text-right">{member.rate}%</span>
                 </div>
               </div>
             ))}
@@ -205,8 +234,8 @@ const Rapports: React.FC = () => {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {departmentStats.map((dept, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4">
+            {departmentStats.map((dept, idx) => (
+              <div key={idx} className="border border-gray-200 rounded-lg p-4">
                 <h3 className="font-semibold text-gray-900 mb-3">{dept.name}</h3>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
@@ -227,7 +256,7 @@ const Rapports: React.FC = () => {
                       <span className="font-medium">{dept.rate}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className="bg-blue-600 h-2 rounded-full"
                         style={{ width: `${dept.rate}%` }}
                       ></div>
@@ -240,7 +269,7 @@ const Rapports: React.FC = () => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default Rapports;
+export default Rapports

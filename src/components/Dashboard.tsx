@@ -1,8 +1,47 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Users, CheckSquare, FolderOpen, TrendingUp, Clock, AlertCircle } from 'lucide-react';
-import { teamMembers, tasks, projects } from '../data/mockData';
+
+type Task = {
+  id: string;
+  title: string;
+  status: string;
+  assigned_to: string | number;
+  due_date?: string;
+  priority?: string;
+};
+
+type TeamMember = {
+  id: string | number;
+  name: string;
+  department?: string;
+};
+
+type Project = {
+  id: string;
+  name: string;
+  status: string;
+  description?: string;
+  progress?: number;
+  teamMembers?: (string | number)[];
+};
 
 const Dashboard: React.FC = () => {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+
+  useEffect(() => {
+    fetch('/db.json') // عدل هذا المسار إذا لازم
+      .then(res => res.json())
+      .then(data => {
+        setTasks(data.tasks || []);
+        setTeamMembers(data.users || []);
+        setProjects(data.projects || []);
+      })
+      .catch(err => console.error('Erreur lors du chargement des données:', err));
+  }, []);
+
+  // إحصائيات
   const completedTasks = tasks.filter(task => task.status === 'completed').length;
   const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
   const todoTasks = tasks.filter(task => task.status === 'todo').length;
@@ -10,36 +49,39 @@ const Dashboard: React.FC = () => {
 
   const stats = [
     {
-      title: 'Membres d\'équipe',
+      title: "Membres d'équipe",
       value: teamMembers.length,
       icon: Users,
       color: 'bg-blue-500',
-      change: '+2 ce mois'
+      change: '+2 ce mois',
     },
     {
       title: 'Tâches terminées',
       value: completedTasks,
       icon: CheckSquare,
       color: 'bg-green-500',
-      change: '+12 cette semaine'
+      change: '+12 cette semaine',
     },
     {
       title: 'Projets actifs',
       value: activeProjects,
       icon: FolderOpen,
       color: 'bg-purple-500',
-      change: '2 en cours'
+      change: '2 en cours',
     },
     {
       title: 'Productivité',
       value: '87%',
       icon: TrendingUp,
       color: 'bg-orange-500',
-      change: '+5% ce mois'
-    }
+      change: '+5% ce mois',
+    },
   ];
 
+  // المهام الحديثة (آخر 5)
   const recentTasks = tasks.slice(0, 5);
+
+  // المهام العاجلة: أولوية عالية وغير مكتملة
   const urgentTasks = tasks.filter(task => task.priority === 'high' && task.status !== 'completed');
 
   return (
@@ -75,65 +117,57 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Tasks */}
         <div className="bg-white rounded-lg shadow-md border border-gray-100">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center">
-              <Clock className="w-5 h-5 text-gray-500 mr-2" />
-              <h3 className="text-lg font-semibold text-gray-900">Tâches Récentes</h3>
-            </div>
+          <div className="p-6 border-b border-gray-200 flex items-center space-x-2">
+            <Clock className="w-5 h-5 text-gray-500" />
+            <h3 className="text-lg font-semibold text-gray-900">Tâches Récentes</h3>
           </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              {recentTasks.map((task) => {
-                const assignedUser = teamMembers.find(member => member.id === task.assignedTo);
-                return (
-                  <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{task.title}</h4>
-                      <p className="text-sm text-gray-600">Assigné à {assignedUser?.name}</p>
-                    </div>
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                      task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {task.status === 'completed' ? 'Terminé' :
-                       task.status === 'in-progress' ? 'En cours' : 'À faire'}
-                    </span>
+          <div className="p-6 space-y-4">
+            {recentTasks.map(task => {
+              const assignedUser = teamMembers.find(member => member.id == task.assigned_to);
+              return (
+                <div key={task.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+                  <div>
+                    <h4 className="font-medium text-gray-900">{task.title}</h4>
+                    <p className="text-sm text-gray-600">Assigné à {assignedUser?.name || 'Non assigné'}</p>
                   </div>
-                );
-              })}
-            </div>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {task.status === 'completed' ? 'Terminé' :
+                     task.status === 'in-progress' ? 'En cours' : 'À faire'}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Urgent Tasks */}
         <div className="bg-white rounded-lg shadow-md border border-gray-100">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center">
-              <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-              <h3 className="text-lg font-semibold text-gray-900">Tâches Urgentes</h3>
-            </div>
+          <div className="p-6 border-b border-gray-200 flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <h3 className="text-lg font-semibold text-gray-900">Tâches Urgentes</h3>
           </div>
-          <div className="p-6">
-            <div className="space-y-4">
-              {urgentTasks.length > 0 ? urgentTasks.map((task) => {
-                const assignedUser = teamMembers.find(member => member.id === task.assignedTo);
-                return (
-                  <div key={task.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{task.title}</h4>
-                      <p className="text-sm text-gray-600">Assigné à {assignedUser?.name}</p>
-                      <p className="text-xs text-red-600">Échéance: {new Date(task.dueDate).toLocaleDateString('fr-FR')}</p>
-                    </div>
-                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                      Priorité haute
-                    </span>
-                  </div>
-                );
-              }) : (
-                <p className="text-gray-500 text-center py-4">Aucune tâche urgente</p>
-              )}
-            </div>
+          <div className="p-6 space-y-4">
+            {urgentTasks.length > 0 ? urgentTasks.map(task => {
+              const assignedUser = teamMembers.find(member => member.id == task.assigned_to);
+              return (
+                <div key={task.id} className="p-3 bg-red-50 rounded-lg border border-red-200">
+                  <h4 className="font-medium text-gray-900">{task.title}</h4>
+                  <p className="text-sm text-red-700">Assigné à {assignedUser?.name || 'Non assigné'}</p>
+                  <p className="text-xs text-red-600">
+                    Échéance: {task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR') : 'Non défini'}
+                  </p>
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                    Priorité haute
+                  </span>
+                </div>
+              );
+            }) : (
+              <p className="text-gray-500 text-center py-4">Aucune tâche urgente</p>
+            )}
           </div>
         </div>
       </div>
@@ -145,7 +179,7 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {projects.map((project) => (
+            {projects.map(project => (
               <div key={project.id} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-medium text-gray-900">{project.name}</h4>
@@ -158,22 +192,26 @@ const Dashboard: React.FC = () => {
                      project.status === 'planning' ? 'Planification' : project.status}
                   </span>
                 </div>
-                <p className="text-sm text-gray-600 mb-3">{project.description}</p>
-                <div className="mb-3">
-                  <div className="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>Progression</span>
-                    <span>{project.progress}%</span>
+                {project.description && (
+                  <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                )}
+                {typeof project.progress === 'number' && (
+                  <div className="mb-3">
+                    <div className="flex justify-between text-sm text-gray-600 mb-1">
+                      <span>Progression</span>
+                      <span>{project.progress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${project.progress}%` }}
+                      ></div>
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${project.progress}%` }}
-                    ></div>
-                  </div>
-                </div>
+                )}
                 <div className="flex items-center text-sm text-gray-600">
                   <Users className="w-4 h-4 mr-1" />
-                  <span>{project.teamMembers.length} membres</span>
+                  <span>{project.teamMembers?.length || 0} membres</span>
                 </div>
               </div>
             ))}
