@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { LogIn, Eye, EyeOff } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabaseClient' // تأكد من المسار الصحيح
+import { supabase } from '../lib/supabaseClient'
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -10,46 +9,29 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // افترض عندك signIn في context, إذا ماعندكش تقدر تحذفه
-  const { signIn } = useAuth()
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     try {
-      // استدعاء تسجيل الدخول عبر Supabase
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      if (signInError) {
+      if (error) {
         setError('Email ou mot de passe incorrect')
-        setLoading(false)
-        return
-      }
-
-      if (data.session) {
-        // تخزين في localStorage إذا احتجت
-        localStorage.setItem('access_token', data.session.access_token)
-        localStorage.setItem('refresh_token', data.session.refresh_token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-
-        // لو عندك signIn في context لاستكمال الدخول
-        if (signIn) {
-          await signIn(email, password)
-        }
-
-        // إعادة تحميل الصفحة أو تحويل المستخدم للداشبورد
-        window.location.reload()
       } else {
-        setError('Erreur lors de la connexion')
+        // login success
+        // save user data in localStorage or context if needed
+        // for example:
+        localStorage.setItem('user', JSON.stringify(data.user))
+        window.location.reload()
       }
     } catch (err) {
-      console.error('Login error:', err)
       setError('Erreur de connexion au serveur')
+      console.error('Login error:', err)
     } finally {
       setLoading(false)
     }
