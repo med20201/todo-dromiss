@@ -31,17 +31,17 @@ const Dashboard: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
 
   useEffect(() => {
-    fetch('/db.json') // عدل هذا المسار إذا لازم
+    fetch('/db.json') // تأكد المسار الصحيح لملف JSON
       .then(res => res.json())
       .then(data => {
         setTasks(data.tasks || []);
         setTeamMembers(data.users || []);
         setProjects(data.projects || []);
       })
-      .catch(err => console.error('Erreur lors du chargement des données:', err));
+      .catch(err => console.error('Error loading data:', err));
   }, []);
 
-  // إحصائيات
+  // حساب الإحصائيات
   const completedTasks = tasks.filter(task => task.status === 'completed').length;
   const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
   const todoTasks = tasks.filter(task => task.status === 'todo').length;
@@ -78,14 +78,14 @@ const Dashboard: React.FC = () => {
     },
   ];
 
-  // المهام الحديثة (آخر 5)
+  // المهام الأخيرة (آخر 5)
   const recentTasks = tasks.slice(0, 5);
 
-  // المهام العاجلة: أولوية عالية وغير مكتملة
+  // المهام العاجلة (ذات أولوية عالية وغير مكتملة)
   const urgentTasks = tasks.filter(task => task.priority === 'high' && task.status !== 'completed');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-6 text-white">
         <h1 className="text-3xl font-bold mb-2">Tableau de Bord Dromiss</h1>
