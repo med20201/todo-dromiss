@@ -73,6 +73,43 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
     }
   }
 
+  // UPDATED: Create user profile only if needed (for authenticated users)
+  const ensureUserProfile = async (userId: string, userName: string | null, userEmail: string | null) => {
+    try {
+      // Check if user profile exists in your custom users table
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .single()
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Erreur lors de la vérification du profil utilisateur:', checkError)
+        throw checkError
+      }
+
+      if (!existingProfile) {
+        // Create user profile in your custom users table
+        // Don't include email since the user is already authenticated
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: userId, // Use the authenticated user's ID
+            name: userName || 'Utilisateur',
+            role: 'user',
+          })
+
+        if (insertError) {
+          console.error('Erreur lors de la création du profil utilisateur:', insertError)
+          throw insertError
+        }
+      }
+    } catch (error) {
+      console.error('Erreur dans ensureUserProfile:', error)
+      throw error
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) {
@@ -83,6 +120,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
     setLoading(true)
 
     try {
+      // تأكد من وجود المستخدم في جدول users قبل إدخال المهمة
+      await ensureUserProfile(user.id, user.user_metadata?.full_name || null, null)
+
       const taskData = {
         title: formData.title,
         description: formData.description,
