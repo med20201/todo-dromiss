@@ -1,10 +1,22 @@
 import React, { useEffect, useState } from 'react'
-import { BarChart3, TrendingUp, Download, Calendar, Users, CheckSquare } from 'lucide-react'
+import {
+  Users,
+  CheckSquare,
+  FolderOpen,
+  TrendingUp,
+  Clock,
+  AlertCircle,
+} from 'lucide-react'
+
+const API_BASE = 'http://localhost:3001'
 
 type Task = {
   id: string
+  title: string
   status: string
   assigned_to: string | number
+  due_date?: string
+  priority?: string
 }
 
 type TeamMember = {
@@ -15,253 +27,206 @@ type TeamMember = {
 
 type Project = {
   id: string
+  name: string
   status: string
+  description?: string
+  progress?: number
+  teamMembers?: (string | number)[]
 }
 
-const Rapports: React.FC = () => {
+const Dashboard: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([])
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [projects, setProjects] = useState<Project[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // غير الرابط حسب مكان ملف db.json الخاص بك
-    fetch('/db.json')
-      .then(res => res.json())
-      .then(data => {
-        setTasks(data.tasks || [])
-        setTeamMembers(data.users || [])
-        setProjects(data.projects || [])
+    setLoading(true)
+    Promise.all([
+      fetch(`${API_BASE}/tasks`).then(res => res.json()),
+      fetch(`${API_BASE}/users`).then(res => res.json()),
+      fetch(`${API_BASE}/projects`).then(res => res.json()),
+    ])
+      .then(([tasksData, usersData, projectsData]) => {
+        setTasks(tasksData || [])
+        setTeamMembers(usersData || [])
+        setProjects(projectsData || [])
       })
       .catch(err => console.error('Error loading data:', err))
+      .finally(() => setLoading(false))
   }, [])
 
-  // حساب إحصائيات المهام
-  const totalTasks = tasks.length
-  const completedTasks = tasks.filter(t => t.status === 'completed').length
-  const inProgressTasks = tasks.filter(t => t.status === 'in-progress').length
-  const todoTasks = tasks.filter(t => t.status === 'todo').length
-  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+  const completedTasks = tasks.filter(task => task.status === 'completed').length
+  const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length
+  const todoTasks = tasks.filter(task => task.status === 'todo').length
+  const activeProjects = projects.filter(project => project.status === 'active').length
 
-  // إنتاجية كل عضو في الفريق
-  const teamProductivity = teamMembers.map(member => {
-    const memberTasks = tasks.filter(task => task.assigned_to == member.id)
-    const memberCompleted = memberTasks.filter(task => task.status === 'completed')
-    return {
-      name: member.name,
-      total: memberTasks.length,
-      completed: memberCompleted.length,
-      rate: memberTasks.length > 0 ? Math.round((memberCompleted.length / memberTasks.length) * 100) : 0,
-    }
-  })
+  const stats = [
+    {
+      title: "Membres d'équipe",
+      value: teamMembers.length,
+      icon: Users,
+      color: 'bg-blue-500',
+      change: '+2 ce mois',
+    },
+    {
+      title: 'Tâches terminées',
+      value: completedTasks,
+      icon: CheckSquare,
+      color: 'bg-green-500',
+      change: '+12 cette semaine',
+    },
+    {
+      title: 'Projets actifs',
+      value: activeProjects,
+      icon: FolderOpen,
+      color: 'bg-purple-500',
+      change: '2 en cours',
+    },
+    {
+      title: 'Productivité',
+      value: '87%',
+      icon: TrendingUp,
+      color: 'bg-orange-500',
+      change: '+5% ce mois',
+    },
+  ]
 
-  // إحصائيات الأقسام
-  const departments = Array.from(new Set(teamMembers.map(m => m.department).filter(Boolean))) as string[]
-  const departmentStats = departments.map(dept => {
-    const deptMembers = teamMembers.filter(m => m.department === dept)
-    const deptTasks = tasks.filter(task => deptMembers.some(m => m.id == task.assigned_to))
-    const deptCompleted = deptTasks.filter(task => task.status === 'completed')
-    return {
-      name: dept,
-      members: deptMembers.length,
-      tasks: deptTasks.length,
-      completed: deptCompleted.length,
-      rate: deptTasks.length > 0 ? Math.round((deptCompleted.length / deptTasks.length) * 100) : 0,
-    }
-  })
+  const recentTasks = tasks.slice(0, 5)
+  const urgentTasks = tasks.filter(task => task.priority === 'high' && task.status !== 'completed')
+
+  if (loading) {
+    return <div className="p-8 text-center text-gray-600">Chargement des données...</div>
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Rapports et Analyses</h1>
-            <p className="text-gray-600 mt-1">Suivez les performances et la productivité de votre équipe</p>
-          </div>
-          <button className="mt-4 sm:mt-0 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
-            <Download className="w-4 h-4 mr-2" />
-            Exporter PDF
-          </button>
-        </div>
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-6 text-white">
+        <h1 className="text-3xl font-bold mb-2">Tableau de Bord Dromiss</h1>
+        <p className="text-blue-100">Bienvenue dans votre espace de gestion des tâches et projets</p>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <CheckSquare className="w-6 h-6 text-blue-600" />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, index) => {
+          const Icon = stat.icon
+          return (
+            <div key={index} className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="text-xs text-green-600 mt-1">{stat.change}</p>
+                </div>
+                <div className={`${stat.color} p-3 rounded-lg`}>
+                  <Icon className="w-6 h-6 text-white" />
+                </div>
+              </div>
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Taux de Completion</p>
-              <p className="text-2xl font-bold text-gray-900">{completionRate}%</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-green-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Productivité</p>
-              <p className="text-2xl font-bold text-gray-900">87%</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Users className="w-6 h-6 text-purple-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Équipe Active</p>
-              <p className="text-2xl font-bold text-gray-900">{teamMembers.length}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
-          <div className="flex items-center">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <BarChart3 className="w-6 h-6 text-orange-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Projets Actifs</p>
-              <p className="text-2xl font-bold text-gray-900">{projects.filter(p => p.status === 'active').length}</p>
-            </div>
-          </div>
-        </div>
+          )
+        })}
       </div>
 
-      {/* Task Distribution Chart */}
-      <div className="bg-white rounded-lg shadow-md border border-gray-100">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Distribution des Tâches</h2>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* ToDo Tasks */}
-            <div className="text-center">
-              <div className="w-24 h-24 mx-auto mb-4 relative">
-                <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-900">{todoTasks}</div>
-                    <div className="text-xs text-gray-600">À faire</div>
+      {/* Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Tasks */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-100">
+          <div className="p-6 border-b border-gray-200 flex items-center space-x-2">
+            <Clock className="w-5 h-5 text-gray-500" />
+            <h3 className="text-lg font-semibold text-gray-900">Tâches Récentes</h3>
+          </div>
+          <div className="p-6 space-y-4">
+            {recentTasks.map(task => {
+              const assignedUser = teamMembers.find(member => member.id == task.assigned_to)
+              return (
+                <div key={task.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+                  <div>
+                    <h4 className="font-medium text-gray-900">{task.title}</h4>
+                    <p className="text-sm text-gray-600">Assigné à {assignedUser?.name || 'Non assigné'}</p>
                   </div>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {task.status === 'completed' ? 'Terminé' :
+                     task.status === 'in-progress' ? 'En cours' : 'À faire'}
+                  </span>
                 </div>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-gray-600 h-2 rounded-full"
-                  style={{ width: `${totalTasks ? (todoTasks / totalTasks) * 100 : 0}%` }}
-                ></div>
-              </div>
-            </div>
-
-            {/* In Progress Tasks */}
-            <div className="text-center">
-              <div className="w-24 h-24 mx-auto mb-4 relative">
-                <div className="w-24 h-24 rounded-full bg-blue-200 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-900">{inProgressTasks}</div>
-                    <div className="text-xs text-blue-700">En cours</div>
-                  </div>
-                </div>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full"
-                  style={{ width: `${totalTasks ? (inProgressTasks / totalTasks) * 100 : 0}%` }}
-                ></div>
-              </div>
-            </div>
-
-            {/* Completed Tasks */}
-            <div className="text-center">
-              <div className="w-24 h-24 mx-auto mb-4 relative">
-                <div className="w-24 h-24 rounded-full bg-green-200 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-900">{completedTasks}</div>
-                    <div className="text-xs text-green-700">Terminées</div>
-                  </div>
-                </div>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-green-600 h-2 rounded-full"
-                  style={{ width: `${totalTasks ? (completedTasks / totalTasks) * 100 : 0}%` }}
-                ></div>
-              </div>
-            </div>
+              )
+            })}
           </div>
         </div>
-      </div>
 
-      {/* Productivity per member */}
-      <div className="bg-white rounded-lg shadow-md border border-gray-100">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Productivité par Membre</h2>
-        </div>
-        <div className="p-6">
-          <div className="space-y-4">
-            {teamProductivity.map((member, idx) => (
-              <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex-1">
-                  <h3 className="font-medium text-gray-900">{member.name}</h3>
-                  <p className="text-sm text-gray-600">
-                    {member.completed}/{member.total} tâches terminées
+        {/* Urgent Tasks */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-100">
+          <div className="p-6 border-b border-gray-200 flex items-center space-x-2">
+            <AlertCircle className="w-5 h-5 text-red-500" />
+            <h3 className="text-lg font-semibold text-gray-900">Tâches Urgentes</h3>
+          </div>
+          <div className="p-6 space-y-4">
+            {urgentTasks.length > 0 ? urgentTasks.map(task => {
+              const assignedUser = teamMembers.find(member => member.id == task.assigned_to)
+              return (
+                <div key={task.id} className="p-3 bg-red-50 rounded-lg border border-red-200">
+                  <h4 className="font-medium text-gray-900">{task.title}</h4>
+                  <p className="text-sm text-red-700">Assigné à {assignedUser?.name || 'Non assigné'}</p>
+                  <p className="text-xs text-red-600">
+                    Échéance: {task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR') : 'Non défini'}
                   </p>
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                    Priorité haute
+                  </span>
                 </div>
-                <div className="flex items-center space-x-4">
-                  <div className="w-32 bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full"
-                      style={{ width: `${member.rate}%` }}
-                    ></div>
-                  </div>
-                  <span className="text-sm font-medium text-gray-900 w-12 text-right">{member.rate}%</span>
-                </div>
-              </div>
-            ))}
+              )
+            }) : (
+              <p className="text-gray-500 text-center py-4">Aucune tâche urgente</p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Department Statistics */}
+      {/* Projects Overview */}
       <div className="bg-white rounded-lg shadow-md border border-gray-100">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Performance par Département</h2>
+          <h3 className="text-lg font-semibold text-gray-900">Aperçu des Projets</h3>
         </div>
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {departmentStats.map((dept, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">{dept.name}</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Membres:</span>
-                    <span className="font-medium">{dept.members}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tâches totales:</span>
-                    <span className="font-medium">{dept.tasks}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Terminées:</span>
-                    <span className="font-medium">{dept.completed}</span>
-                  </div>
-                  <div className="mt-3">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Taux de réussite:</span>
-                      <span className="font-medium">{dept.rate}%</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {projects.map(project => (
+              <div key={project.id} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900">{project.name}</h4>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    project.status === 'active' ? 'bg-green-100 text-green-800' :
+                    project.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {project.status === 'active' ? 'Actif' :
+                     project.status === 'planning' ? 'Planification' : project.status}
+                  </span>
+                </div>
+                {project.description && (
+                  <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                )}
+                {typeof project.progress === 'number' && (
+                  <div className="mb-3">
+                    <div className="flex justify-between text-sm text-gray-600 mb-1">
+                      <span>Progression</span>
+                      <span>{project.progress}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{ width: `${dept.rate}%` }}
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${project.progress}%` }}
                       ></div>
                     </div>
                   </div>
+                )}
+                <div className="flex items-center text-sm text-gray-600">
+                  <Users className="w-4 h-4 mr-1" />
+                  <span>{project.teamMembers?.length || 0} membres</span>
                 </div>
               </div>
             ))}
@@ -272,4 +237,4 @@ const Rapports: React.FC = () => {
   )
 }
 
-export default Rapports
+export default Dashboard
