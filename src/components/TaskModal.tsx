@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { X, Save } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabaseClient' // عدل المسار إذا لزم
-import { v4 as uuidv4 } from 'uuid' // توليد UUID
+import { supabase } from '../lib/supabaseClient'
+import { v4 as uuidv4 } from 'uuid'
 
 interface TaskModalProps {
   isOpen: boolean
@@ -21,7 +21,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
     description: '',
     status: 'todo' as 'todo' | 'in-progress' | 'completed',
     priority: 'medium' as 'low' | 'medium' | 'high',
-    assigned_to: '',
+    assigned_to: [] as string[], // مصفوفة IDs لأعضاء الفريق
     project_id: '',
     due_date: '',
   })
@@ -32,12 +32,21 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
       fetchProjects()
 
       if (task) {
+        // التأكد من أن assigned_to هي مصفوفة نصوص دائماً
+        let assignedArray: string[] = []
+        try {
+          const parsed = JSON.parse(task.assigned_to)
+          assignedArray = Array.isArray(parsed) ? parsed.map(String) : []
+        } catch {
+          assignedArray = []
+        }
+
         setFormData({
           title: task.title || '',
           description: task.description || '',
           status: task.status || 'todo',
           priority: task.priority || 'medium',
-          assigned_to: task.assigned_to || '',
+          assigned_to: assignedArray,
           project_id: task.project_id || '',
           due_date: task.due_date ? task.due_date.split('T')[0] : '',
         })
@@ -47,7 +56,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
           description: '',
           status: 'todo',
           priority: 'medium',
-          assigned_to: '',
+          assigned_to: [],
           project_id: '',
           due_date: '',
         })
@@ -73,6 +82,17 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
     }
   }
 
+  const handleCheckboxChange = (memberId: string) => {
+    setFormData(prev => {
+      const assigned = Array.isArray(prev.assigned_to) ? prev.assigned_to : []
+      if (assigned.includes(memberId)) {
+        return { ...prev, assigned_to: assigned.filter(id => id !== memberId) }
+      } else {
+        return { ...prev, assigned_to: [...assigned, memberId] }
+      }
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) {
@@ -88,7 +108,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
         description: formData.description,
         status: formData.status,
         priority: formData.priority,
-        assigned_to: formData.assigned_to || null,
+        assigned_to: JSON.stringify(formData.assigned_to), // نخزن كمصفوفة JSON نصية
         project_id: formData.project_id || null,
         due_date: formData.due_date || null,
         updated_at: new Date().toISOString(),
@@ -110,7 +130,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
           .insert([
             {
               ...taskData,
-              id: uuidv4(), // توليد UUID جديد
+              id: uuidv4(),
               created_by: user.id,
               created_at: new Date().toISOString(),
             },
@@ -164,7 +184,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Form inputs comme سابقا */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Titre de la tâche *
@@ -224,26 +243,27 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Assigné à *
-              </label>
-              <select
-                value={formData.assigned_to}
-                onChange={e => setFormData({ ...formData, assigned_to: e.target.value })}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Sélectionner un membre</option>
-                {teamMembers.map(member => (
-                  <option key={member.id} value={member.id}>
-                    {member.name} - {member.role || 'Membre'}
-                  </option>
-                ))}
-              </select>
+          {/* قائمة Checkboxes لأعضاء الفريق */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Assigné à *
+            </label>
+            <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-3 space-y-2">
+              {teamMembers.map(member => (
+                <label key={member.id} className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={Array.isArray(formData.assigned_to) && formData.assigned_to.includes(String(member.id))}
+                    onChange={() => handleCheckboxChange(String(member.id))}
+                    className="form-checkbox h-5 w-5 text-blue-600"
+                  />
+                  <span>{member.name} - {member.role || 'Membre'}</span>
+                </label>
+              ))}
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Projet
@@ -261,19 +281,19 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
                 ))}
               </select>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Date d'échéance *
-            </label>
-            <input
-              type="date"
-              value={formData.due_date}
-              onChange={e => setFormData({ ...formData, due_date: e.target.value })}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Date d'échéance *
+              </label>
+              <input
+                type="date"
+                value={formData.due_date}
+                onChange={e => setFormData({ ...formData, due_date: e.target.value })}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">

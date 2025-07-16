@@ -270,7 +270,16 @@ const Taches: React.FC = () => {
               </div>
             ) : (
               filteredTasks.map(task => {
-                const assignedUser = teamMembers.find(member => member.id === task.assigned_to)
+                // assigned_to قد يكون JSON نصي أو مصفوفة
+                let assignedIds: string[] = []
+                try {
+                  assignedIds = typeof task.assigned_to === 'string' ? JSON.parse(task.assigned_to) : task.assigned_to
+                } catch {
+                  assignedIds = []
+                }
+
+                const assignedUsers = teamMembers.filter(member => assignedIds.includes(member.id))
+
                 return (
                   <div key={task.id} className="p-6 hover:bg-gray-50 transition-colors">
                     <div className="flex items-start justify-between">
@@ -284,9 +293,13 @@ const Taches: React.FC = () => {
                         </div>
                         <p className="text-gray-600 mb-3">{task.description}</p>
                         <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <User className="w-4 h-4 mr-1" />
-                            <span>{assignedUser?.name || 'Non assigné'}</span>
+                          <div className="flex items-center space-x-1">
+                            <User className="w-4 h-4" />
+                            <span>
+                              {assignedUsers.length > 0
+                                ? assignedUsers.map(u => u.name).join(', ')
+                                : 'Non assigné'}
+                            </span>
                           </div>
                           <div className="flex items-center">
                             <Calendar className="w-4 h-4 mr-1" />

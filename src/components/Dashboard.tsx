@@ -6,7 +6,7 @@ type Task = {
   id: string;
   title: string;
   status: string;
-  assigned_to: string | number;
+  assigned_to: string; // نص JSON يحوي مصفوفة IDs
   due_date?: string;
   priority?: string;
 };
@@ -57,6 +57,23 @@ const Dashboard: React.FC = () => {
 
     fetchData();
   }, []);
+
+  // دالة لتحويل assigned_to النصي (JSON) إلى أسماء الأعضاء
+  const formatAssignedUsers = (assignedToJson: string) => {
+    if (!assignedToJson) return 'Non assigné';
+    try {
+      const assignedIds: (string | number)[] = JSON.parse(assignedToJson);
+      if (!Array.isArray(assignedIds) || assignedIds.length === 0) return 'Non assigné';
+
+      const names = assignedIds.map(id => {
+        const user = teamMembers.find(m => String(m.id) === String(id));
+        return user ? user.name : 'Inconnu';
+      });
+      return names.join(', ');
+    } catch (error) {
+      return 'Erreur de format';
+    }
+  };
 
   // حساب الإحصائيات
   const completedTasks = tasks.filter(task => task.status === 'completed').length;
@@ -145,25 +162,22 @@ const Dashboard: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Tâches Récentes</h3>
           </div>
           <div className="p-6 space-y-4">
-            {recentTasks.map(task => {
-              const assignedUser = teamMembers.find(member => member.id == task.assigned_to);
-              return (
-                <div key={task.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
-                  <div>
-                    <h4 className="font-medium text-gray-900">{task.title}</h4>
-                    <p className="text-sm text-gray-600">Assigné à {assignedUser?.name || 'Non assigné'}</p>
-                  </div>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {task.status === 'completed' ? 'Terminé' :
-                     task.status === 'in-progress' ? 'En cours' : 'À faire'}
-                  </span>
+            {recentTasks.map(task => (
+              <div key={task.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+                <div>
+                  <h4 className="font-medium text-gray-900">{task.title}</h4>
+                  <p className="text-sm text-gray-600">Assigné à {formatAssignedUsers(task.assigned_to)}</p>
                 </div>
-              );
-            })}
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                  task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                  task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {task.status === 'completed' ? 'Terminé' :
+                   task.status === 'in-progress' ? 'En cours' : 'À faire'}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -174,21 +188,18 @@ const Dashboard: React.FC = () => {
             <h3 className="text-lg font-semibold text-gray-900">Tâches Urgentes</h3>
           </div>
           <div className="p-6 space-y-4">
-            {urgentTasks.length > 0 ? urgentTasks.map(task => {
-              const assignedUser = teamMembers.find(member => member.id == task.assigned_to);
-              return (
-                <div key={task.id} className="p-3 bg-red-50 rounded-lg border border-red-200">
-                  <h4 className="font-medium text-gray-900">{task.title}</h4>
-                  <p className="text-sm text-red-700">Assigné à {assignedUser?.name || 'Non assigné'}</p>
-                  <p className="text-xs text-red-600">
-                    Échéance: {task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR') : 'Non défini'}
-                  </p>
-                  <span className="inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                    Priorité haute
-                  </span>
-                </div>
-              );
-            }) : (
+            {urgentTasks.length > 0 ? urgentTasks.map(task => (
+              <div key={task.id} className="p-3 bg-red-50 rounded-lg border border-red-200">
+                <h4 className="font-medium text-gray-900">{task.title}</h4>
+                <p className="text-sm text-red-700">Assigné à {formatAssignedUsers(task.assigned_to)}</p>
+                <p className="text-xs text-red-600">
+                  Échéance: {task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR') : 'Non défini'}
+                </p>
+                <span className="inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                  Priorité haute
+                </span>
+              </div>
+            )) : (
               <p className="text-gray-500 text-center py-4">Aucune tâche urgente</p>
             )}
           </div>
