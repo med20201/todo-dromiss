@@ -25,23 +25,44 @@ type Project = {
   teamMembers?: (string | number)[];
 };
 
+const API_BASE_URL = ''; // ولا 'http://localhost:3001' مثلا حسب بيئتك
+// Example:
+// - locally: set to '' or 'http://localhost:3001' if you have API
+// - on Vercel: set to your remote API URL or serve static JSON
+
 const Dashboard: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/db.json') // تأكد المسار الصحيح لملف JSON
-      .then(res => res.json())
-      .then(data => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const res = await fetch(`${API_BASE_URL}/db.json`);
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+        const data = await res.json();
         setTasks(data.tasks || []);
         setTeamMembers(data.users || []);
         setProjects(data.projects || []);
-      })
-      .catch(err => console.error('Error loading data:', err));
+      } catch (err: any) {
+        setError(err.message || 'Erreur lors du chargement des données');
+        setTasks([]);
+        setTeamMembers([]);
+        setProjects([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
   }, []);
 
-  // حساب الإحصائيات
+  // stats calculations
   const completedTasks = tasks.filter(task => task.status === 'completed').length;
   const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
   const todoTasks = tasks.filter(task => task.status === 'todo').length;
@@ -78,11 +99,24 @@ const Dashboard: React.FC = () => {
     },
   ];
 
-  // المهام الأخيرة (آخر 5)
   const recentTasks = tasks.slice(0, 5);
-
-  // المهام العاجلة (ذات أولوية عالية وغير مكتملة)
   const urgentTasks = tasks.filter(task => task.priority === 'high' && task.status !== 'completed');
+
+  if (loading) {
+    return (
+      <div className="p-6 text-center">
+        <p>Chargement...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center text-red-600">
+        <p>Erreur: {error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6">
