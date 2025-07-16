@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { X, Save } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabaseClient' // عدل المسار لو لازم
+import { supabase } from '../lib/supabaseClient' // عدل المسار إذا لزم
 import { v4 as uuidv4 } from 'uuid' // توليد UUID
 
 interface TaskModalProps {
@@ -73,43 +73,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
     }
   }
 
-  // UPDATED: Create user profile only if needed (for authenticated users)
-  const ensureUserProfile = async (userId: string, userName: string | null, userEmail: string | null) => {
-    try {
-      // Check if user profile exists in your custom users table
-      const { data: existingProfile, error: checkError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', userId)
-        .single()
-
-      if (checkError && checkError.code !== 'PGRST116') {
-        console.error('Erreur lors de la vérification du profil utilisateur:', checkError)
-        throw checkError
-      }
-
-      if (!existingProfile) {
-        // Create user profile in your custom users table
-        // Don't include email since the user is already authenticated
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert({
-            id: userId, // Use the authenticated user's ID
-            name: userName || 'Utilisateur',
-            role: 'user',
-          })
-
-        if (insertError) {
-          console.error('Erreur lors de la création du profil utilisateur:', insertError)
-          throw insertError
-        }
-      }
-    } catch (error) {
-      console.error('Erreur dans ensureUserProfile:', error)
-      throw error
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) {
@@ -120,9 +83,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
     setLoading(true)
 
     try {
-      // تأكد من وجود المستخدم في جدول users قبل إدخال المهمة
-      await ensureUserProfile(user.id, user.user_metadata?.full_name || null, null)
-
       const taskData = {
         title: formData.title,
         description: formData.description,
@@ -170,6 +130,25 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
     }
   }
 
+  const handleDelete = async () => {
+    if (!task) return
+    if (!window.confirm('Voulez-vous vraiment supprimer cette tâche ?')) return
+
+    setLoading(true)
+    try {
+      const { error } = await supabase.from('tasks').delete().eq('id', task.id)
+      if (error) throw error
+
+      onTaskSaved()
+      onClose()
+    } catch (error: any) {
+      console.error('Erreur suppression tâche:', error)
+      alert('Erreur lors de la suppression de la tâche: ' + (error.message || error.details || 'Erreur inconnue'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -185,6 +164,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Form inputs comme سابقا */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Titre de la tâche *
@@ -301,9 +281,22 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              disabled={loading}
             >
               Annuler
             </button>
+
+            {task && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                disabled={loading}
+              >
+                Supprimer
+              </button>
+            )}
+
             <button
               type="submit"
               disabled={loading}
