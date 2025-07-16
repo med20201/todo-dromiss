@@ -31,7 +31,7 @@ const Navbar: React.FC<NavbarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'equipe', label: 'Équipe', icon: Users },
     { id: 'taches', label: 'Tâches', icon: CheckSquare },
-    { id: 'projets', label: 'Projets', icon: FolderOpen },
+    // { id: 'projets', label: 'Projets', icon: FolderOpen },
     { id: 'rapports', label: 'Rapports', icon: BarChart3 },
     { id: 'parametres', label: 'Paramètres', icon: Settings },
   ];
