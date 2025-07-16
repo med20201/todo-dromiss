@@ -1,0 +1,187 @@
+import React from 'react';
+import { Users, CheckSquare, FolderOpen, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { teamMembers, tasks, projects } from '../data/mockData';
+
+const Dashboard: React.FC = () => {
+  const completedTasks = tasks.filter(task => task.status === 'completed').length;
+  const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
+  const todoTasks = tasks.filter(task => task.status === 'todo').length;
+  const activeProjects = projects.filter(project => project.status === 'active').length;
+
+  const stats = [
+    {
+      title: 'Membres d\'équipe',
+      value: teamMembers.length,
+      icon: Users,
+      color: 'bg-blue-500',
+      change: '+2 ce mois'
+    },
+    {
+      title: 'Tâches terminées',
+      value: completedTasks,
+      icon: CheckSquare,
+      color: 'bg-green-500',
+      change: '+12 cette semaine'
+    },
+    {
+      title: 'Projets actifs',
+      value: activeProjects,
+      icon: FolderOpen,
+      color: 'bg-purple-500',
+      change: '2 en cours'
+    },
+    {
+      title: 'Productivité',
+      value: '87%',
+      icon: TrendingUp,
+      color: 'bg-orange-500',
+      change: '+5% ce mois'
+    }
+  ];
+
+  const recentTasks = tasks.slice(0, 5);
+  const urgentTasks = tasks.filter(task => task.priority === 'high' && task.status !== 'completed');
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-lg p-6 text-white">
+        <h1 className="text-3xl font-bold mb-2">Tableau de Bord Dromiss</h1>
+        <p className="text-blue-100">Bienvenue dans votre espace de gestion des tâches et projets</p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <div key={index} className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="text-xs text-green-600 mt-1">{stat.change}</p>
+                </div>
+                <div className={`${stat.color} p-3 rounded-lg`}>
+                  <Icon className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Tasks */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-100">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center">
+              <Clock className="w-5 h-5 text-gray-500 mr-2" />
+              <h3 className="text-lg font-semibold text-gray-900">Tâches Récentes</h3>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              {recentTasks.map((task) => {
+                const assignedUser = teamMembers.find(member => member.id === task.assignedTo);
+                return (
+                  <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{task.title}</h4>
+                      <p className="text-sm text-gray-600">Assigné à {assignedUser?.name}</p>
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {task.status === 'completed' ? 'Terminé' :
+                       task.status === 'in-progress' ? 'En cours' : 'À faire'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Urgent Tasks */}
+        <div className="bg-white rounded-lg shadow-md border border-gray-100">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+              <h3 className="text-lg font-semibold text-gray-900">Tâches Urgentes</h3>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="space-y-4">
+              {urgentTasks.length > 0 ? urgentTasks.map((task) => {
+                const assignedUser = teamMembers.find(member => member.id === task.assignedTo);
+                return (
+                  <div key={task.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{task.title}</h4>
+                      <p className="text-sm text-gray-600">Assigné à {assignedUser?.name}</p>
+                      <p className="text-xs text-red-600">Échéance: {new Date(task.dueDate).toLocaleDateString('fr-FR')}</p>
+                    </div>
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
+                      Priorité haute
+                    </span>
+                  </div>
+                );
+              }) : (
+                <p className="text-gray-500 text-center py-4">Aucune tâche urgente</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Projects Overview */}
+      <div className="bg-white rounded-lg shadow-md border border-gray-100">
+        <div className="p-6 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">Aperçu des Projets</h3>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {projects.map((project) => (
+              <div key={project.id} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900">{project.name}</h4>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    project.status === 'active' ? 'bg-green-100 text-green-800' :
+                    project.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {project.status === 'active' ? 'Actif' :
+                     project.status === 'planning' ? 'Planification' : project.status}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                <div className="mb-3">
+                  <div className="flex justify-between text-sm text-gray-600 mb-1">
+                    <span>Progression</span>
+                    <span>{project.progress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${project.progress}%` }}
+                    ></div>
+                  </div>
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Users className="w-4 h-4 mr-1" />
+                  <span>{project.teamMembers.length} membres</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
