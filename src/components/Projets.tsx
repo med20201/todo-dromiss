@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Plus, Calendar, Users, Trash2 } from 'lucide-react'  // import Trash2 icon for delete
+import { Plus, Calendar, Users, Trash2 } from 'lucide-react'
 import ProjectModal from './ProjectModal'
 
 type Project = {
@@ -40,11 +40,18 @@ const Projets: React.FC = () => {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/db.json')
-      const data = await response.json()
-      setProjects(data.projects || [])
-      setTeamMembers(data.users || [])
-      setTasks(data.tasks || [])
+      // لو كنت تستعمل API من السيرفر، بدّل الرابط أدناه
+      const projectsResponse = await fetch('http://localhost:3001/projects')
+      const projectsData = await projectsResponse.json()
+      setProjects(projectsData || [])
+
+      const usersResponse = await fetch('http://localhost:3001/users')
+      const usersData = await usersResponse.json()
+      setTeamMembers(usersData || [])
+
+      const tasksResponse = await fetch('http://localhost:3001/tasks')
+      const tasksData = await tasksResponse.json()
+      setTasks(tasksData || [])
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -97,7 +104,7 @@ const Projets: React.FC = () => {
   }
 
   const handleDeleteProject = async (id: string, name: string) => {
-    if (!window.confirm(`Voulez-vous vraiment supprimer le projet "${name}" ?`)) return;
+    if (!window.confirm(`Voulez-vous vraiment supprimer le projet "${name}" ?`)) return
 
     try {
       const response = await fetch(`http://localhost:3001/projects/${id}`, {
@@ -240,7 +247,7 @@ const Projets: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Delete button moved to bottom */}
+                {/* Delete button at bottom */}
                 <div className="bg-gray-50 px-6 py-3 flex justify-between items-center">
                   <button
                     className="text-blue-600 hover:text-blue-800 text-sm font-medium"
