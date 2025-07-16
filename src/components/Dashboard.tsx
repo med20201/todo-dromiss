@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Users, CheckSquare, FolderOpen, TrendingUp, Clock, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient'; // تأكد المسار صحيح عندك
+import { supabase } from '../lib/supabaseClient'; // تأكد المسار صحيح
 
 type Task = {
   id: string;
   title: string;
   status: string;
-  assigned_to: string; // نص JSON يحوي مصفوفة IDs
+  assigned_to: string;
   due_date?: string;
   priority?: string;
 };
@@ -23,7 +23,7 @@ type Project = {
   status: string;
   description?: string;
   progress?: number;
-  teamMembers?: (string | number)[];
+  teammembers?: string | (string | number)[];
 };
 
 const Dashboard: React.FC = () => {
@@ -45,9 +45,24 @@ const Dashboard: React.FC = () => {
         const { data: projectsData, error: projectsError } = await supabase.from('projects').select('*');
         if (projectsError) throw projectsError;
 
+        // تفكيك teammembers (لاحظ اسم الحقل صغير)
+        const projectsParsed = (projectsData || []).map(proj => {
+          let members: (string | number)[] = [];
+          if (typeof proj.teammembers === 'string') {
+            try {
+              members = JSON.parse(proj.teammembers);
+            } catch {
+              members = [];
+            }
+          } else if (Array.isArray(proj.teammembers)) {
+            members = proj.teammembers;
+          }
+          return { ...proj, teammembers: members };
+        });
+
         setTasks(tasksData || []);
         setTeamMembers(usersData || []);
-        setProjects(projectsData || []);
+        setProjects(projectsParsed);
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -58,7 +73,7 @@ const Dashboard: React.FC = () => {
     fetchData();
   }, []);
 
-  // دالة لتحويل assigned_to النصي (JSON) إلى أسماء الأعضاء
+  // دالة لتحويل assigned_to JSON إلى أسماء
   const formatAssignedUsers = (assignedToJson: string) => {
     if (!assignedToJson) return 'Non assigné';
     try {
@@ -70,15 +85,13 @@ const Dashboard: React.FC = () => {
         return user ? user.name : 'Inconnu';
       });
       return names.join(', ');
-    } catch (error) {
+    } catch {
       return 'Erreur de format';
     }
   };
 
   // حساب الإحصائيات
   const completedTasks = tasks.filter(task => task.status === 'completed').length;
-  const inProgressTasks = tasks.filter(task => task.status === 'in-progress').length;
-  const todoTasks = tasks.filter(task => task.status === 'todo').length;
   const activeProjects = projects.filter(project => project.status === 'active').length;
 
   const stats = [
@@ -112,17 +125,7 @@ const Dashboard: React.FC = () => {
     },
   ];
 
-  // المهام الأخيرة (آخر 5)
-  const recentTasks = tasks.slice(0, 5);
-
-  // المهام العاجلة (ذات أولوية عالية وغير مكتملة)
-  const urgentTasks = tasks.filter(task => task.priority === 'high' && task.status !== 'completed');
-
-  if (loading) {
-    return (
-      <div className="p-8 text-center text-gray-600">Chargement des données...</div>
-    );
-  }
+  if (loading) return <div className="p-8 text-center text-gray-600">Chargement des données...</div>;
 
   return (
     <div className="space-y-6 p-6">
@@ -134,10 +137,10 @@ const Dashboard: React.FC = () => {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => {
+        {stats.map((stat, i) => {
           const Icon = stat.icon;
           return (
-            <div key={index} className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
+            <div key={i} className="bg-white rounded-lg shadow-md p-6 border border-gray-100">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">{stat.title}</p>
@@ -153,59 +156,6 @@ const Dashboard: React.FC = () => {
         })}
       </div>
 
-      {/* Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Tasks */}
-        <div className="bg-white rounded-lg shadow-md border border-gray-100">
-          <div className="p-6 border-b border-gray-200 flex items-center space-x-2">
-            <Clock className="w-5 h-5 text-gray-500" />
-            <h3 className="text-lg font-semibold text-gray-900">Tâches Récentes</h3>
-          </div>
-          <div className="p-6 space-y-4">
-            {recentTasks.map(task => (
-              <div key={task.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
-                <div>
-                  <h4 className="font-medium text-gray-900">{task.title}</h4>
-                  <p className="text-sm text-gray-600">Assigné à {formatAssignedUsers(task.assigned_to)}</p>
-                </div>
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                  task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {task.status === 'completed' ? 'Terminé' :
-                   task.status === 'in-progress' ? 'En cours' : 'À faire'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Urgent Tasks */}
-        <div className="bg-white rounded-lg shadow-md border border-gray-100">
-          <div className="p-6 border-b border-gray-200 flex items-center space-x-2">
-            <AlertCircle className="w-5 h-5 text-red-500" />
-            <h3 className="text-lg font-semibold text-gray-900">Tâches Urgentes</h3>
-          </div>
-          <div className="p-6 space-y-4">
-            {urgentTasks.length > 0 ? urgentTasks.map(task => (
-              <div key={task.id} className="p-3 bg-red-50 rounded-lg border border-red-200">
-                <h4 className="font-medium text-gray-900">{task.title}</h4>
-                <p className="text-sm text-red-700">Assigné à {formatAssignedUsers(task.assigned_to)}</p>
-                <p className="text-xs text-red-600">
-                  Échéance: {task.due_date ? new Date(task.due_date).toLocaleDateString('fr-FR') : 'Non défini'}
-                </p>
-                <span className="inline-block mt-2 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-                  Priorité haute
-                </span>
-              </div>
-            )) : (
-              <p className="text-gray-500 text-center py-4">Aucune tâche urgente</p>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* Projects Overview */}
       <div className="bg-white rounded-lg shadow-md border border-gray-100">
         <div className="p-6 border-b border-gray-200">
@@ -213,42 +163,57 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {projects.map(project => (
-              <div key={project.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-gray-900">{project.name}</h4>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    project.status === 'active' ? 'bg-green-100 text-green-800' :
-                    project.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {project.status === 'active' ? 'Actif' :
-                     project.status === 'planning' ? 'Planification' : project.status}
-                  </span>
-                </div>
-                {project.description && (
-                  <p className="text-sm text-gray-600 mb-3">{project.description}</p>
-                )}
-                {typeof project.progress === 'number' && (
-                  <div className="mb-3">
-                    <div className="flex justify-between text-sm text-gray-600 mb-1">
-                      <span>Progression</span>
-                      <span>{project.progress}%</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${project.progress}%` }}
-                      ></div>
-                    </div>
+            {projects.map(project => {
+              const members = (project.teammembers || []).map(id => teamMembers.find(m => String(m.id) === String(id))).filter(Boolean) as TeamMember[];
+
+              return (
+                <div key={project.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-medium text-gray-900">{project.name}</h4>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      project.status === 'active' ? 'bg-green-100 text-green-800' :
+                      project.status === 'planning' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {project.status === 'active' ? 'Actif' :
+                       project.status === 'planning' ? 'Planification' : project.status}
+                    </span>
                   </div>
-                )}
-                <div className="flex items-center text-sm text-gray-600">
-                  <Users className="w-4 h-4 mr-1" />
-                  <span>{project.teamMembers?.length || 0} membres</span>
+
+                  {project.description && (
+                    <p className="text-sm text-gray-600 mb-3">{project.description}</p>
+                  )}
+
+                  {typeof project.progress === 'number' && (
+                    <div className="mb-3">
+                      <div className="flex justify-between text-sm text-gray-600 mb-1">
+                        <span>Progression</span>
+                        <span>{project.progress}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${project.progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center text-sm text-gray-600 mb-2">
+                    <Users className="w-4 h-4 mr-1" />
+                    <span>{members.length} membres</span>
+                  </div>
+
+                  <div className="text-xs text-gray-700">
+                    {members.length > 0 ? members.map(m => (
+                      <div key={m.id}>{m.name}</div>
+                    )) : (
+                      <span>Aucun membre assigné</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
