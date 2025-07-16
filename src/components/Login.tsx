@@ -1,6 +1,8 @@
+// src/pages/Login.tsx
 import React, { useState } from 'react'
 import { LogIn, Eye, EyeOff } from 'lucide-react'
-import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -8,33 +10,29 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const { signIn, user } = useAuth()
+  const navigate = useNavigate()
+
+  // إذا المستخدم مسجل دخول مسبقًا نوجهه للداشبورد
+  React.useEffect(() => {
+    if (user) {
+      navigate('/dashboard')
+    }
+  }, [user, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        setError('Email ou mot de passe incorrect')
-      } else {
-        // login success
-        // save user data in localStorage or context if needed
-        // for example:
-        localStorage.setItem('user', JSON.stringify(data.user))
-        window.location.reload()
-      }
-    } catch (err) {
-      setError('Erreur de connexion au serveur')
-      console.error('Login error:', err)
-    } finally {
-      setLoading(false)
+    const { error } = await signIn(email, password)
+    if (error) {
+      setError('Email ou mot de passe incorrect')
+    } else {
+      navigate('/dashboard')
     }
+
+    setLoading(false)
   }
 
   return (
@@ -64,7 +62,7 @@ const Login: React.FC = () => {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={e => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 placeholder="votre.email@dromiss.com"
@@ -80,7 +78,7 @@ const Login: React.FC = () => {
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={e => setPassword(e.target.value)}
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors pr-12"
                   placeholder="••••••••"

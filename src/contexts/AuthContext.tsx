@@ -1,109 +1,66 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { jsonServerClient, auth } from '../lib/api'
+// src/contexts/AuthContext.tsx
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { supabase } from '../lib/supabaseClient'
 
 interface User {
   id: string
-  name: string
   email: string
-  role: string
-  department: string
-  avatar: string | null
-  created_at: string
+  [key: string]: any
 }
 
 interface AuthContextType {
   user: User | null
-  userProfile: User | null
+  loading: boolean
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signOut: () => Promise<void>
-  loading: boolean
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  userProfile: null,
-  signIn: async () => ({ error: null }),
-  signOut: async () => {},
-  loading: true,
-})
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
-  const [userProfile, setUserProfile] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    auth.getSession().then(({ data }) => {
-      const sessionUser = data.session?.user
-      setUser(sessionUser ?? null)
-      if (sessionUser) {
-        fetchUserProfile(sessionUser.id)
-      }
+    // تحقق من الجلسة عند تحميل التطبيق
+    const session = supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null)
       setLoading(false)
     })
 
-    // Listen for auth changes
-    const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
-      const sessionUser = session?.user
-      setUser(sessionUser ?? null)
-      if (sessionUser) {
-        await fetchUserProfile(sessionUser.id)
-      } else {
-        setUserProfile(null)
-      }
+    // استمع لتغيرات الجلسة
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
       setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      listener?.subscription.unsubscribe()
+    }
   }, [])
 
-  const fetchUserProfile = async (userId: string) => {
-    try {
-      const { data, error } = await jsonServerClient
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (error) throw error
-      setUserProfile(data)
-    } catch (error) {
-      console.error('Error fetching user profile:', error)
-    }
-  }
-
   const signIn = async (email: string, password: string) => {
-    const { error } = await auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (!error) setUser(data.user)
     return { error }
   }
 
   const signOut = async () => {
-    await auth.signOut()
-  }
-
-  const value = {
-    user,
-    userProfile,
-    signIn,
-    signOut,
-    loading,
+    await supabase.auth.signOut()
+    setUser(null)
   }
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   )
+}
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
 }
