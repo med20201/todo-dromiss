@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { LogIn, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabaseClient' // تأكد من المسار الصحيح
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -8,6 +9,8 @@ const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // افترض عندك signIn في context, إذا ماعندكش تقدر تحذفه
   const { signIn } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,53 +19,37 @@ const Login: React.FC = () => {
     setError('')
 
     try {
-      // First, get all users to validate credentials
-      const usersResponse = await fetch('http://localhost:3001/users')
-      const users = await usersResponse.json()
+      // استدعاء تسجيل الدخول عبر Supabase
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-      // Find user with matching email and password
-      const user = users.find((u: any) => u.email === email && u.password === password)
-
-      if (!user) {
+      if (signInError) {
         setError('Email ou mot de passe incorrect')
         setLoading(false)
         return
       }
 
-      // Create a new session
-      const sessionResponse = await fetch('http://localhost:3001/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: user.id,
-          access_token: `token_${Date.now()}`,
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
-        }),
-      })
+      if (data.session) {
+        // تخزين في localStorage إذا احتجت
+        localStorage.setItem('access_token', data.session.access_token)
+        localStorage.setItem('refresh_token', data.session.refresh_token)
+        localStorage.setItem('user', JSON.stringify(data.user))
 
-      const sessionData = await sessionResponse.json()
-
-      if (sessionResponse.ok) {
-        // Store session data in localStorage
-        localStorage.setItem('access_token', sessionData.access_token)
-        localStorage.setItem('user', JSON.stringify(user))
-        localStorage.setItem('session_id', sessionData.id)
-        
-        // Call the signIn function from context if needed
-        const { error } = await signIn(email, password)
-        
-        if (!error) {
-          // Redirect to dashboard on successful login
-        window.location.reload()
+        // لو عندك signIn في context لاستكمال الدخول
+        if (signIn) {
+          await signIn(email, password)
         }
+
+        // إعادة تحميل الصفحة أو تحويل المستخدم للداشبورد
+        window.location.reload()
       } else {
-        setError('Erreur lors de la création de la session')
+        setError('Erreur lors de la connexion')
       }
     } catch (err) {
-      setError('Erreur de connexion au serveur')
       console.error('Login error:', err)
+      setError('Erreur de connexion au serveur')
     } finally {
       setLoading(false)
     }
@@ -72,15 +59,7 @@ const Login: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full space-y-8">
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          {/* Header */}
           <div className="text-center mb-8">
-            {/* <div className="w-20 h-16 mx-auto mb-4 flex items-center justify-center">
-              <img 
-                src="https://images.pexels.com/photos/3184291/pexels-photo-3184291.jpeg?auto=compress&cs=tinysrgb&w=80&h=64&fit=crop" 
-                alt="Dromiss Logistics" 
-                className="w-full h-full object-contain"
-              />
-            </div> */}
             <h2 className="text-3xl font-bold">
               <span className="text-blue-700">DROMISS</span>
               <span className="text-orange-500 text-lg ml-2">LOGISTICS</span>
@@ -88,7 +67,6 @@ const Login: React.FC = () => {
             <p className="text-gray-600 mt-2">Gestion des Tâches et Projets</p>
           </div>
 
-          {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
