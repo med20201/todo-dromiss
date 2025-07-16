@@ -1,122 +1,130 @@
 import React, { useState, useEffect } from 'react'
 import { X, Save } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabaseClient' // تأكد من المسار الصحيح
+import { supabase } from '../lib/supabaseClient' // عدل المسار لو لازم
+import { v4 as uuidv4 } from 'uuid' // توليد UUID
 
-interface ProjectModalProps {
+interface TaskModalProps {
   isOpen: boolean
   onClose: () => void
-  project?: any
-  onProjectSaved: () => void
+  task?: any
+  onTaskSaved: () => void
 }
 
-const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, onProjectSaved }) => {
+const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSaved }) => {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
-
+  const [teamMembers, setTeamMembers] = useState<any[]>([])
+  const [projects, setProjects] = useState<any[]>([])
   const [formData, setFormData] = useState({
-    name: '',
+    title: '',
     description: '',
-    status: 'planning' as 'active' | 'planning' | 'completed' | 'on-hold',
-    progress: 0,
-    start_date: '',
-    end_date: '',
-    teamMembers: [] as string[],
+    status: 'todo' as 'todo' | 'in-progress' | 'completed',
+    priority: 'medium' as 'low' | 'medium' | 'high',
+    assigned_to: '',
+    project_id: '',
+    due_date: '',
   })
-
-  const [teamMembersList, setTeamMembersList] = useState<any[]>([])
 
   useEffect(() => {
     if (isOpen) {
       fetchTeamMembers()
-      if (project) {
+      fetchProjects()
+
+      if (task) {
         setFormData({
-          name: project.name || '',
-          description: project.description || '',
-          status: project.status || 'planning',
-          progress: project.progress || 0,
-          start_date: project.start_date ? project.start_date.split('T')[0] : '',
-          end_date: project.end_date ? project.end_date.split('T')[0] : '',
-          teamMembers: project.teamMembers || [],
+          title: task.title || '',
+          description: task.description || '',
+          status: task.status || 'todo',
+          priority: task.priority || 'medium',
+          assigned_to: task.assigned_to || '',
+          project_id: task.project_id || '',
+          due_date: task.due_date ? task.due_date.split('T')[0] : '',
         })
       } else {
         setFormData({
-          name: '',
+          title: '',
           description: '',
-          status: 'planning',
-          progress: 0,
-          start_date: '',
-          end_date: '',
-          teamMembers: [],
+          status: 'todo',
+          priority: 'medium',
+          assigned_to: '',
+          project_id: '',
+          due_date: '',
         })
       }
     }
-  }, [isOpen, project])
+  }, [isOpen, task])
 
   const fetchTeamMembers = async () => {
-    const { data, error } = await supabase.from('users').select('*')
+    const { data, error } = await supabase.from('users').select('id, name, role')
     if (error) {
       console.error('Erreur fetch team members:', error)
     } else {
-      setTeamMembersList(data || [])
+      setTeamMembers(data || [])
     }
   }
 
-  const handleCheckboxChange = (userId: string) => {
-    setFormData(prev => {
-      const exists = prev.teamMembers.includes(userId)
-      let newTeamMembers = []
-      if (exists) {
-        newTeamMembers = prev.teamMembers.filter(id => id !== userId)
-      } else {
-        newTeamMembers = [...prev.teamMembers, userId]
-      }
-      return { ...prev, teamMembers: newTeamMembers }
-    })
+  const fetchProjects = async () => {
+    const { data, error } = await supabase.from('projects').select('id, name')
+    if (error) {
+      console.error('Erreur fetch projects:', error)
+    } else {
+      setProjects(data || [])
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) return
+    if (!user) {
+      alert('Utilisateur non connecté')
+      return
+    }
+
     setLoading(true)
 
     try {
-      const projectData = {
-        ...formData,
-        progress: Number(formData.progress),
+      const taskData = {
+        title: formData.title,
+        description: formData.description,
+        status: formData.status,
+        priority: formData.priority,
+        assigned_to: formData.assigned_to || null,
+        project_id: formData.project_id || null,
+        due_date: formData.due_date || null,
         updated_at: new Date().toISOString(),
-        teamMembers: formData.teamMembers,
-        start_date: formData.start_date || null,
-        end_date: formData.end_date || null,
       }
 
-      if (project) {
-        // تحديث مشروع موجود
-        const { error } = await supabase
-          .from('projects')
-          .update(projectData)
-          .eq('id', project.id)
-        if (error) throw error
+      let error
+
+      if (task) {
+        // تحديث مهمة موجودة
+        const { error: err } = await supabase
+          .from('tasks')
+          .update(taskData)
+          .eq('id', task.id)
+        error = err
       } else {
-        // إضافة مشروع جديد
-        const { error } = await supabase
-          .from('projects')
+        // إنشاء مهمة جديدة
+        const { error: err } = await supabase
+          .from('tasks')
           .insert([
             {
-              ...projectData,
+              ...taskData,
+              id: uuidv4(), // توليد UUID جديد
               created_by: user.id,
               created_at: new Date().toISOString(),
-              id: Date.now().toString(),
             },
           ])
-        if (error) throw error
+        error = err
       }
 
-      onProjectSaved()
+      if (error) throw error
+
+      onTaskSaved()
       onClose()
-    } catch (error) {
-      console.error('Erreur sauvegarde projet:', error)
-      alert('Erreur lors de la sauvegarde du projet')
+    } catch (error: any) {
+      console.error('Erreur sauvegarde tâche:', error)
+      alert('Erreur lors de la sauvegarde de la tâche: ' + (error.message || error.details || 'Erreur inconnue'))
     } finally {
       setLoading(false)
     }
@@ -129,12 +137,9 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900">
-            {project ? 'Modifier le projet' : 'Nouveau projet'}
+            {task ? 'Modifier la tâche' : 'Nouvelle tâche'}
           </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -142,15 +147,15 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Nom du projet *
+              Titre de la tâche *
             </label>
             <input
               type="text"
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              value={formData.title}
+              onChange={e => setFormData({ ...formData, title: e.target.value })}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Entrez le nom du projet"
+              placeholder="Entrez le titre de la tâche"
             />
           </div>
 
@@ -163,7 +168,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
               onChange={e => setFormData({ ...formData, description: e.target.value })}
               rows={4}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Description du projet"
+              placeholder="Décrivez la tâche en détail"
             />
           </div>
 
@@ -177,75 +182,78 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
                 onChange={e => setFormData({ ...formData, status: e.target.value as any })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="active">Actif</option>
-                <option value="planning">Planification</option>
+                <option value="todo">À faire</option>
+                <option value="in-progress">En cours</option>
                 <option value="completed">Terminé</option>
-                <option value="on-hold">En pause</option>
               </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Progression (%)
+                Priorité
               </label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={formData.progress}
-                onChange={e => setFormData({ ...formData, progress: Number(e.target.value) })}
+              <select
+                value={formData.priority}
+                onChange={e => setFormData({ ...formData, priority: e.target.value as any })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="0 - 100"
-              />
+              >
+                <option value="low">Basse</option>
+                <option value="medium">Moyenne</option>
+                <option value="high">Haute</option>
+              </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date de début
+                Assigné à *
               </label>
-              <input
-                type="date"
-                value={formData.start_date}
-                onChange={e => setFormData({ ...formData, start_date: e.target.value })}
+              <select
+                value={formData.assigned_to}
+                onChange={e => setFormData({ ...formData, assigned_to: e.target.value })}
+                required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              >
+                <option value="">Sélectionner un membre</option>
+                {teamMembers.map(member => (
+                  <option key={member.id} value={member.id}>
+                    {member.name} - {member.role || 'Membre'}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Date de fin prévue
+                Projet
               </label>
-              <input
-                type="date"
-                value={formData.end_date}
-                onChange={e => setFormData({ ...formData, end_date: e.target.value })}
+              <select
+                value={formData.project_id}
+                onChange={e => setFormData({ ...formData, project_id: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+              >
+                <option value="">Aucun projet</option>
+                {projects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Membres de l'équipe
+              Date d'échéance *
             </label>
-            <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-3 space-y-2">
-              {teamMembersList.map(member => (
-                <label
-                  key={member.id}
-                  className="flex items-center space-x-3 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={formData.teamMembers.includes(member.id)}
-                    onChange={() => handleCheckboxChange(member.id)}
-                    className="form-checkbox h-5 w-5 text-blue-600"
-                  />
-                  <span>{member.name} ({member.role || 'Membre'})</span>
-                </label>
-              ))}
-            </div>
+            <input
+              type="date"
+              value={formData.due_date}
+              onChange={e => setFormData({ ...formData, due_date: e.target.value })}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
 
           <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
@@ -266,7 +274,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
               ) : (
                 <Save className="w-4 h-4 mr-2" />
               )}
-              {project ? 'Mettre à jour' : 'Créer le projet'}
+              {task ? 'Mettre à jour' : 'Créer la tâche'}
             </button>
           </div>
         </form>
@@ -275,4 +283,4 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
   )
 }
 
-export default ProjectModal
+export default TaskModal
