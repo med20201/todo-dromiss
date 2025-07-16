@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabaseClient'
 import {
   BarChart3,
   TrendingUp,
@@ -11,6 +12,7 @@ type Task = {
   id: string
   status: string
   assigned_to: string | number
+  // ممكن تزيد حقول أخرى حسب جدولك
 }
 
 type TeamMember = {
@@ -31,25 +33,33 @@ const Rapports: React.FC = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    setLoading(true)
-    Promise.all([
-      fetch('http://localhost:3001/tasks').then(res => res.json()),
-      fetch('http://localhost:3001/users').then(res => res.json()),
-      fetch('http://localhost:3001/projects').then(res => res.json()),
-    ])
-      .then(([tasksData, usersData, projectsData]) => {
+    const fetchData = async () => {
+      setLoading(true)
+      try {
+        const { data: tasksData, error: tasksError } = await supabase.from('tasks').select('*')
+        if (tasksError) throw tasksError
+
+        const { data: usersData, error: usersError } = await supabase.from('users').select('*')
+        if (usersError) throw usersError
+
+        const { data: projectsData, error: projectsError } = await supabase.from('projects').select('*')
+        if (projectsError) throw projectsError
+
         setTasks(tasksData || [])
         setTeamMembers(usersData || [])
         setProjects(projectsData || [])
-      })
-      .catch(err => console.error('Error loading data:', err))
-      .finally(() => setLoading(false))
+      } catch (error) {
+        console.error('Error loading data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
   }, [])
 
   if (loading) {
-    return (
-      <div className="p-8 text-center text-gray-600">Chargement des données...</div>
-    )
+    return <div className="p-8 text-center text-gray-600">Chargement des données...</div>
   }
 
   // حساب إحصائيات المهام

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Users, CheckSquare, FolderOpen, TrendingUp, Clock, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient'; // تأكد المسار صحيح عندك
 
 type Task = {
   id: string;
@@ -32,19 +33,29 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetch('http://localhost:3001/tasks').then(res => res.json()),
-      fetch('http://localhost:3001/users').then(res => res.json()),
-      fetch('http://localhost:3001/projects').then(res => res.json()),
-    ])
-      .then(([tasksData, usersData, projectsData]) => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const { data: tasksData, error: tasksError } = await supabase.from('tasks').select('*');
+        if (tasksError) throw tasksError;
+
+        const { data: usersData, error: usersError } = await supabase.from('users').select('*');
+        if (usersError) throw usersError;
+
+        const { data: projectsData, error: projectsError } = await supabase.from('projects').select('*');
+        if (projectsError) throw projectsError;
+
         setTasks(tasksData || []);
         setTeamMembers(usersData || []);
         setProjects(projectsData || []);
-      })
-      .catch(err => console.error('Error loading data:', err))
-      .finally(() => setLoading(false));
+      } catch (error) {
+        console.error('Error loading data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   // حساب الإحصائيات
