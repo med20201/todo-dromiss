@@ -582,6 +582,50 @@
         "avatar": null,
         "created_at": "2024-01-01T00:00:00.000Z"
       }
+    },
+    {
+      "id": "5e28",
+      "user_id": "1",
+      "access_token": "token_1752638354523",
+      "expires_at": "2025-07-17T03:59:14.523Z"
+    },
+    {
+      "id": "1752638354564",
+      "user_id": "1",
+      "access_token": "token_1752638354564",
+      "expires_at": "2025-07-17T03:59:14.564Z",
+      "created_at": "2025-07-16T03:59:14.564Z",
+      "user": {
+        "id": "1",
+        "name": "Mohamed Aboummar",
+        "email": "mohamed@dromiss.com",
+        "role": "Responsable Technique",
+        "department": "Technique",
+        "avatar": null,
+        "created_at": "2024-01-01T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "3bb7",
+      "user_id": "1",
+      "access_token": "token_1752638366280",
+      "expires_at": "2025-07-17T03:59:26.280Z"
+    },
+    {
+      "id": "1752638366315",
+      "user_id": "1",
+      "access_token": "token_1752638366315",
+      "expires_at": "2025-07-17T03:59:26.315Z",
+      "created_at": "2025-07-16T03:59:26.315Z",
+      "user": {
+        "id": "1",
+        "name": "Mohamed Aboummar",
+        "email": "mohamed@dromiss.com",
+        "role": "Responsable Technique",
+        "department": "Technique",
+        "avatar": null,
+        "created_at": "2024-01-01T00:00:00.000Z"
+      }
     }
   ]
 }

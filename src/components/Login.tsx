@@ -55,7 +55,7 @@ const Login: React.FC = () => {
         
         if (!error) {
           // Redirect to dashboard on successful login
-          window.location.href = '/dashboard'
+        window.location.reload()
         }
       } else {
         setError('Erreur lors de la création de la session')
