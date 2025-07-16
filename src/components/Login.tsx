@@ -16,7 +16,7 @@ const Login: React.FC = () => {
   // إذا المستخدم مسجل دخول مسبقًا نوجهه للداشبورد
   React.useEffect(() => {
     if (user) {
-      navigate('/dashboard')
+      navigate('/')
     }
   }, [user, navigate])
 
@@ -29,7 +29,7 @@ const Login: React.FC = () => {
     if (error) {
       setError('Email ou mot de passe incorrect')
     } else {
-      navigate('/dashboard')
+      navigate('/')
     }
 
     setLoading(false)
