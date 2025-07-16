@@ -1,26 +1,31 @@
 import express from 'express'
-import mongoose from 'mongoose'
 import cors from 'cors'
-import dotenv from 'dotenv'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-dotenv.config()
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const app = express()
+const PORT = process.env.PORT || 3000
+
 app.use(cors())
-app.use(express.json())
 
-const uri = process.env.MONGODB_URI
-mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch(err => console.error('❌ MongoDB Error:', err))
-
-app.get('/', (req, res) => res.send('API is running'))
-
-// Example route
-app.get('/api/users', async (req, res) => {
-  const users = await mongoose.connection.db.collection('users').find().toArray()
-  res.json(users)
+// Endpoint: /api/users
+app.get('/api/users', (req, res) => {
+  try {
+    const dbPath = path.join(__dirname, 'db.json') // ⬅️ يتأكد أنه يقرا من ./db.json
+    const rawData = fs.readFileSync(dbPath, 'utf-8')
+    const data = JSON.parse(rawData)
+    const users = data.users || []
+    res.json(users)
+  } catch (err) {
+    console.error('❌ Error reading db.json:', err)
+    res.status(500).json({ error: 'Failed to load data from db.json' })
+  }
 })
 
-const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`))
+app.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`)
+})
