@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Plus, Trash2, Users } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import ProjectModal from './ProjectModal'
 import { supabase } from '../lib/supabaseClient'  // تأكد المسار صحيح عندك
 
@@ -44,7 +44,26 @@ const Projets: React.FC = () => {
       // جلب المشاريع
       const { data: projectsData, error: projectsError } = await supabase.from('projects').select('*')
       if (projectsError) throw projectsError
-      setProjects(projectsData || [])
+
+      // تحويل teamMembers من نص JSON إلى مصفوفة إذا لزم الأمر
+      const projectsParsed = (projectsData || []).map(proj => {
+        let teamMembersParsed: string[] = []
+        if (typeof proj.teammembers === 'string') {  // لاحظ 'teammembers' صغير
+          try {
+            teamMembersParsed = JSON.parse(proj.teammembers)
+          } catch (e) {
+            teamMembersParsed = []
+          }
+        } else if (Array.isArray(proj.teammembers)) {
+          teamMembersParsed = proj.teammembers
+        }
+        return {
+          ...proj,
+          teamMembers: teamMembersParsed,
+        }
+      })
+
+      setProjects(projectsParsed)
 
       // جلب أعضاء الفريق
       const { data: usersData, error: usersError } = await supabase.from('users').select('*')
@@ -63,7 +82,7 @@ const Projets: React.FC = () => {
   }
 
   const getProjectTasks = (projectId: string) => {
-    return tasks.filter(task => task.projectId === projectId)
+    return tasks.filter(task => task.projectid === projectId)
   }
 
   const getStatusColor = (status: string) => {
@@ -138,8 +157,8 @@ const Projets: React.FC = () => {
 
             const members = project.teamMembers
               ? project.teamMembers
-                  .map(id => teamMembers.find(m => m.id === id))
-                  .filter(Boolean) as User[]
+                .map(id => teamMembers.find(m => m.id === id))
+                .filter(Boolean) as User[]
               : []
 
             return (
@@ -175,17 +194,18 @@ const Projets: React.FC = () => {
                     <div className="flex space-x-2">
                       {members.length > 0 ? (
                         members.map(member => (
-                          <img
+                          <span
                             key={member.id}
-                            src={member.avatar || '/default-avatar.png'}
-                            alt={member.name}
-                            className="w-8 h-8 rounded-full"
+                            className="text-sm text-gray-700 bg-gray-100 rounded px-2 py-1"
                             title={member.name}
-                          />
+                          >
+                            {member.name}
+                          </span>
                         ))
                       ) : (
                         <span className="text-gray-400">Aucun membre</span>
                       )}
+
                     </div>
                   </div>
                 </div>

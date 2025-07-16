@@ -57,13 +57,15 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
 
   // Récupération des utilisateurs
   const fetchTeamMembers = async () => {
-    const { data, error } = await supabase.from('users').select('*')
-    if (error) {
-      console.error('Erreur fetch team members:', error)
-    } else {
-      setTeamMembersList(data || [])
-    }
+  const { data, error } = await supabase.from('users').select('*')
+  console.log('Users:', data, 'Error:', error)
+  if (error) {
+    console.error('Erreur fetch team members:', error)
+  } else {
+    setTeamMembersList(data || [])
   }
+}
+
 
   // Gestion sélection/désélection checkbox
   const handleCheckboxChange = (userId: string) => {
