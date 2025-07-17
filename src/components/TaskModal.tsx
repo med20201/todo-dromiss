@@ -21,10 +21,27 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
     description: '',
     status: 'todo' as 'todo' | 'in-progress' | 'completed',
     priority: 'medium' as 'low' | 'medium' | 'high',
-    assigned_to: [] as string[], // مصفوفة IDs لأعضاء الفريق
+    assigned_to: [] as string[],
     project_id: '',
     due_date: '',
   })
+
+  // Check if current user can delete (only creator can delete)
+  const canDelete = task && user && String(task.created_by) === String(user.id)
+
+  // Check if current user can update (assigned users can update status and priority)
+  const canUpdateStatusAndPriority = task && user && (() => {
+    try {
+      // task.assigned_to is already parsed as JSONB from Supabase
+      const assignedUsers = Array.isArray(task.assigned_to) ? task.assigned_to : []
+      return assignedUsers.includes(String(user.id))
+    } catch {
+      return false
+    }
+  })()
+
+  // Check if current user can fully edit (only creator can fully edit)
+  const canFullyEdit = !task || (task && user && String(task.created_by) === String(user.id))
 
   useEffect(() => {
     if (isOpen) {
@@ -32,11 +49,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
       fetchProjects()
 
       if (task) {
-        // التأكد من أن assigned_to هي مصفوفة نصوص دائماً
         let assignedArray: string[] = []
         try {
-          const parsed = JSON.parse(task.assigned_to)
-          assignedArray = Array.isArray(parsed) ? parsed.map(String) : []
+          // task.assigned_to is already parsed as JSONB from Supabase
+          assignedArray = Array.isArray(task.assigned_to) ? task.assigned_to.map(String) : []
         } catch {
           assignedArray = []
         }
@@ -100,32 +116,73 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
       return
     }
 
+    // Check permissions before proceeding
+    if (task && !canFullyEdit && !canUpdateStatusAndPriority) {
+      alert('Vous n\'avez pas les permissions pour modifier cette tâche')
+      return
+    }
+
     setLoading(true)
 
     try {
-      const taskData = {
-        title: formData.title,
-        description: formData.description,
-        status: formData.status,
-        priority: formData.priority,
-        assigned_to: JSON.stringify(formData.assigned_to), // نخزن كمصفوفة JSON نصية
-        project_id: formData.project_id || null,
-        due_date: formData.due_date || null,
-        updated_at: new Date().toISOString(),
+      let taskData: any
+
+      if (task && canUpdateStatusAndPriority && !canFullyEdit) {
+        // If user is assigned but not creator, only update status and priority
+        taskData = {
+          status: formData.status,
+          priority: formData.priority,
+          updated_at: new Date().toISOString(),
+        }
+      } else {
+        // If user is creator or creating new task, full update
+        taskData = {
+          title: formData.title,
+          description: formData.description,
+          status: formData.status,
+          priority: formData.priority,
+          assigned_to: formData.assigned_to, // No need to stringify for JSONB
+          project_id: formData.project_id || null,
+          due_date: formData.due_date || null,
+          updated_at: new Date().toISOString(),
+        }
       }
 
-      let error
+      let error, data
 
       if (task) {
-        // تحديث مهمة موجودة
-        const { error: err } = await supabase
+        // Update existing task
+        console.log('Updating task with data:', taskData)
+        console.log('Task ID:', task.id)
+        console.log('User ID:', user.id)
+        console.log('Task created_by:', task.created_by)
+        console.log('Can fully edit:', canFullyEdit)
+        console.log('Can update status/priority:', canUpdateStatusAndPriority)
+        
+        // Always use regular update - RLS policies will handle permissions
+        const updateResult = await supabase
           .from('tasks')
           .update(taskData)
           .eq('id', task.id)
-        error = err
+          .select()
+        
+        console.log('Update result:', updateResult)
+        
+        if (updateResult.error) {
+          console.error('Update error:', updateResult.error)
+          throw updateResult.error
+        }
+        
+        if (!updateResult.data || updateResult.data.length === 0) {
+          console.error('Update returned no data - likely blocked by RLS')
+          throw new Error('Vous n\'avez pas les permissions pour modifier cette tâche. Assurez-vous d\'être assigné à cette tâche.')
+        }
+        
+        data = updateResult.data
+        error = updateResult.error
       } else {
-        // إنشاء مهمة جديدة
-        const { error: err } = await supabase
+        // Create new task
+        const insertResult = await supabase
           .from('tasks')
           .insert([
             {
@@ -135,23 +192,58 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
               created_at: new Date().toISOString(),
             },
           ])
-        error = err
+          .select()
+        
+        console.log('Insert result:', insertResult)
+        data = insertResult.data
+        error = insertResult.error
       }
 
-      if (error) throw error
+      if (error) {
+        console.error('Database error:', error)
+        throw error
+      }
 
+      if (!data || data.length === 0) {
+        throw new Error('No data returned from database operation')
+      }
+
+      console.log('Task operation successful:', data)
+      
+      // Add a longer delay to ensure update propagates
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
       onTaskSaved()
       onClose()
     } catch (error: any) {
-      console.error('Erreur sauvegarde tâche:', error)
-      alert('Erreur lors de la sauvegarde de la tâche: ' + (error.message || error.details || 'Erreur inconnue'))
+      console.error('Error saving task:', error)
+      
+      // More detailed error message
+      let errorMessage = 'Erreur lors de la sauvegarde de la tâche: '
+      
+      if (error.message) {
+        errorMessage += error.message
+      } else if (error.details) {
+        errorMessage += error.details
+      } else if (error.hint) {
+        errorMessage += error.hint
+      } else {
+        errorMessage += 'Erreur inconnue'
+      }
+      
+      // Add RLS policy hint
+      if (error.code === 'PGRST116' || error.message?.includes('permission') || error.message?.includes('policy')) {
+        errorMessage += '\n\nIl semble y avoir un problème de permissions. Vérifiez que vous êtes assigné à cette tâche.'
+      }
+      
+      alert(errorMessage)
     } finally {
       setLoading(false)
     }
   }
 
   const handleDelete = async () => {
-    if (!task) return
+    if (!task || !canDelete) return
     if (!window.confirm('Voulez-vous vraiment supprimer cette tâche ?')) return
 
     setLoading(true)
@@ -193,7 +285,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
               value={formData.title}
               onChange={e => setFormData({ ...formData, title: e.target.value })}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={!canFullyEdit}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                !canFullyEdit ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
               placeholder="Entrez le titre de la tâche"
             />
           </div>
@@ -206,7 +301,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
               value={formData.description}
               onChange={e => setFormData({ ...formData, description: e.target.value })}
               rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={!canFullyEdit}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                !canFullyEdit ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
               placeholder="Décrivez la tâche en détail"
             />
           </div>
@@ -219,7 +317,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
               <select
                 value={formData.status}
                 onChange={e => setFormData({ ...formData, status: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={!canFullyEdit && !canUpdateStatusAndPriority}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  !canFullyEdit && !canUpdateStatusAndPriority ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
               >
                 <option value="todo">À faire</option>
                 <option value="in-progress">En cours</option>
@@ -234,7 +335,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
               <select
                 value={formData.priority}
                 onChange={e => setFormData({ ...formData, priority: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={!canFullyEdit && !canUpdateStatusAndPriority}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  !canFullyEdit && !canUpdateStatusAndPriority ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
               >
                 <option value="low">Basse</option>
                 <option value="medium">Moyenne</option>
@@ -243,25 +347,27 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
             </div>
           </div>
 
-          {/* قائمة Checkboxes لأعضاء الفريق */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Assigné à *
-            </label>
-            <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-3 space-y-2">
-              {teamMembers.map(member => (
-                <label key={member.id} className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={Array.isArray(formData.assigned_to) && formData.assigned_to.includes(String(member.id))}
-                    onChange={() => handleCheckboxChange(String(member.id))}
-                    className="form-checkbox h-5 w-5 text-blue-600"
-                  />
-                  <span>{member.name} - {member.role || 'Membre'}</span>
-                </label>
-              ))}
+          {/* Team members checkboxes - Only for creators */}
+          {canFullyEdit && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Assigné à *
+              </label>
+              <div className="max-h-48 overflow-y-auto border border-gray-300 rounded-lg p-3 space-y-2">
+                {teamMembers.map(member => (
+                  <label key={member.id} className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Array.isArray(formData.assigned_to) && formData.assigned_to.includes(String(member.id))}
+                      onChange={() => handleCheckboxChange(String(member.id))}
+                      className="form-checkbox h-5 w-5 text-blue-600"
+                    />
+                    <span>{member.name} - {member.role || 'Membre'}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -271,7 +377,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
               <select
                 value={formData.project_id}
                 onChange={e => setFormData({ ...formData, project_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={!canFullyEdit}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  !canFullyEdit ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
               >
                 <option value="">Aucun projet</option>
                 {projects.map(project => (
@@ -290,8 +399,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
                 type="date"
                 value={formData.due_date}
                 onChange={e => setFormData({ ...formData, due_date: e.target.value })}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required={!task || canFullyEdit}
+                disabled={!canFullyEdit}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  !canFullyEdit ? 'bg-gray-100 cursor-not-allowed' : ''
+                }`}
               />
             </div>
           </div>
@@ -306,7 +418,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
               Annuler
             </button>
 
-            {task && (
+            {/* Delete button - Only show for task creator */}
+            {canDelete && (
               <button
                 type="button"
                 onClick={handleDelete}
@@ -319,7 +432,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ isOpen, onClose, task, onTaskSave
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (!canFullyEdit && !canUpdateStatusAndPriority)}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (

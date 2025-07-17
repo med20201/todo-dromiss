@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Users, CheckSquare, FolderOpen, TrendingUp, Clock, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient'; // تأكد المسار صحيح عندك
+import { supabase } from '../lib/supabaseClient';
 
 type Task = {
   id: string;
   title: string;
   status: string;
-  assigned_to: string; // نص JSON يحوي مصفوفة IDs
+  assigned_to: string | string[]; // Can be string or array
   due_date?: string;
   priority?: string;
 };
@@ -76,19 +76,41 @@ const Dashboard: React.FC = () => {
     fetchData();
   }, []);
 
-  // لتحويل assigned_to (نص JSON) إلى أسماء أعضاء الفريق مفصولة بفواصل
-  const formatAssignedUsers = (assignedToJson: string) => {
-    if (!assignedToJson) return 'Non assigné';
+  // Fixed function to handle both string and array formats
+  const formatAssignedUsers = (assignedTo: string | string[]) => {
+    if (!assignedTo) return 'Non assigné';
+    
+    let assignedIds: (string | number)[] = [];
+    
     try {
-      const assignedIds: (string | number)[] = JSON.parse(assignedToJson);
-      if (!Array.isArray(assignedIds) || assignedIds.length === 0) return 'Non assigné';
+      // If it's already an array, use it directly
+      if (Array.isArray(assignedTo)) {
+        assignedIds = assignedTo;
+      } 
+      // If it's a string, try to parse it
+      else if (typeof assignedTo === 'string') {
+        // Check if it's a JSON string
+        if (assignedTo.trim().startsWith('[') && assignedTo.trim().endsWith(']')) {
+          assignedIds = JSON.parse(assignedTo);
+        } 
+        // If it's just a single ID as string
+        else {
+          assignedIds = [assignedTo];
+        }
+      }
+      
+      if (!Array.isArray(assignedIds) || assignedIds.length === 0) {
+        return 'Non assigné';
+      }
 
       const names = assignedIds.map(id => {
         const user = teamMembers.find(m => String(m.id) === String(id));
-        return user ? user.name : 'Inconnu';
+        return user ? user.name : `ID: ${id}`;
       });
+      
       return names.join(', ');
-    } catch {
+    } catch (error) {
+      console.error('Error parsing assigned_to:', error, assignedTo);
       return 'Erreur de format';
     }
   };
