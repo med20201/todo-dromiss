@@ -15,7 +15,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [teamMembersList, setTeamMembersList] = useState<any[]>([])
-  
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -26,10 +26,10 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
     teamMembers: [] as string[],
   })
 
-  // Check if current user can delete (only creator can delete)
+  // تحقق من صلاحيات الحذف (صاحب المشروع فقط)
   const canDelete = project && user && String(project.created_by) === String(user.id)
 
-  // Check if current user can update status and progress (assigned users can update these)
+  // تحقق من صلاحيات تعديل الحالة والتقدم (الأعضاء المعينين)
   const canUpdateStatusAndProgress = project && user && (() => {
     try {
       const assignedUsers = Array.isArray(project.team_members) ? project.team_members : []
@@ -39,20 +39,20 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
     }
   })()
 
-  // Check if current user can fully edit (only creator can fully edit)
+  // تحقق من صلاحية التعديل الكامل (صاحب المشروع فقط أو إنشاء جديد)
   const canFullyEdit = !project || (project && user && String(project.created_by) === String(user.id))
 
   useEffect(() => {
     if (isOpen) {
       fetchTeamMembers()
-      
+
       if (project) {
         let teamMembersArray: string[] = []
         try {
-          if (Array.isArray(project.teammembers)) {
-            teamMembersArray = project.teammembers.map(String)
-          } else if (project.teammembers) {
-            teamMembersArray = [String(project.teammembers)]
+          if (Array.isArray(project.team_members)) {
+            teamMembersArray = project.team_members.map(String)
+          } else if (project.team_members) {
+            teamMembersArray = [String(project.team_members)]
           }
         } catch {
           teamMembersArray = []
@@ -84,11 +84,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
   const fetchTeamMembers = async () => {
     try {
       const { data, error } = await supabase.from('users').select('id, name, role')
-      if (error) {
-        console.error('Error fetching team members:', error)
-        throw error
-      }
-      console.log('Team members fetched:', data)
+      if (error) throw error
       setTeamMembersList(data || [])
     } catch (error) {
       console.error('Failed to fetch team members:', error)
@@ -127,12 +123,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
       let projectData: any
 
       if (project && canUpdateStatusAndProgress && !canFullyEdit) {
+        // تحديث محدود للحالة والتقدم فقط
         projectData = {
           status: formData.status,
           progress: Number(formData.progress),
           updated_at: new Date().toISOString(),
         }
       } else {
+        // تحديث كامل أو إنشاء جديد
         projectData = {
           name: formData.name,
           description: formData.description,
@@ -141,7 +139,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
           start_date: formData.start_date || null,
           end_date: formData.end_date || null,
           updated_at: new Date().toISOString(),
-          team_members: formData.teamMembers,
+          team_members: formData.teamMembers, // توحيد الاسم مع DB
         }
       }
 
@@ -182,7 +180,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, project, o
       if (!data || data.length === 0) throw new Error('No data returned from database operation')
 
       await new Promise(resolve => setTimeout(resolve, 500))
-      
+
       onProjectSaved()
       onClose()
     } catch (error: any) {

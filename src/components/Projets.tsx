@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, BarChart3, Clock, Calendar, Users, Trash2 } from 'lucide-react';
-import ProjectModal from './ProjectModal';  // Adjust path if needed
-import { supabase } from '../lib/supabaseClient'; // Your supabase client
+import ProjectModal from './ProjectModal';
+import { supabase } from '../lib/supabaseClient';
 
 interface Project {
   id: string;
@@ -11,16 +11,28 @@ interface Project {
   progress: number;
   start_date: string;
   end_date: string;
-  teammembers: string[];
+  team_members: string[] | string;  // يمكن أن تكون مصفوفة أو نص JSON
 }
 
 const Projets: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [users, setUsers] = useState<{id: string; name: string}[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | undefined>(undefined);
   const [loadingDelete, setLoadingDelete] = useState<string | null>(null);
 
-  // Fetch projects from supabase
+  // جلب جميع المستخدمين من قاعدة البيانات (الأعضاء)
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase.from('users').select('id, name');
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  // جلب المشاريع وفك تشفير team_members إذا كانت نص JSON
   const fetchProjects = async () => {
     try {
       const { data, error } = await supabase
@@ -28,17 +40,60 @@ const Projets: React.FC = () => {
         .select('*')
         .order('start_date', { ascending: false });
       if (error) throw error;
-      setProjects(data || []);
+
+      const projectsWithParsed = (data || []).map(p => {
+        if (typeof p.team_members === 'string') {
+          try {
+            p.team_members = JSON.parse(p.team_members);
+            if (!Array.isArray(p.team_members)) p.team_members = [];
+          } catch {
+            p.team_members = [];
+          }
+        }
+        return p;
+      });
+
+      setProjects(projectsWithParsed);
     } catch (error) {
       console.error('Error fetching projects:', error);
     }
   };
 
   useEffect(() => {
+    fetchUsers();
     fetchProjects();
   }, []);
 
-  // Helpers for status display
+  // دالة لجلب أسماء الأعضاء بناءً على team_members (مصفوفة أو نص)
+  const getTeamMemberNames = (
+    teamMembersField: string[] | string | undefined,
+    usersList: {id: string; name: string}[]
+  ) => {
+    if (!teamMembersField) return [];
+
+    let memberIds: string[] = [];
+
+    if (Array.isArray(teamMembersField)) {
+      memberIds = teamMembersField.map(id => String(id).trim());
+    } else if (typeof teamMembersField === 'string') {
+      try {
+        memberIds = JSON.parse(teamMembersField);
+        if (!Array.isArray(memberIds)) memberIds = [];
+        else memberIds = memberIds.map(id => String(id).trim());
+      } catch {
+        memberIds = teamMembersField.split(',').map(id => id.trim());
+      }
+    } else {
+      return [];
+    }
+
+    return memberIds
+      .map(id => usersList.find(u => String(u.id) === id))
+      .filter(Boolean)
+      .map(u => u!.name);
+  };
+
+  // ألوان الحالة ونصوصها
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800';
@@ -58,7 +113,7 @@ const Projets: React.FC = () => {
     }
   };
 
-  // Handle delete project
+  // حذف المشروع
   const handleDeleteProject = async (projectId: string) => {
     if (!window.confirm('Voulez-vous vraiment supprimer ce projet ?')) return;
     try {
@@ -84,7 +139,7 @@ const Projets: React.FC = () => {
         </div>
         <button
           onClick={() => {
-            setSelectedProject(undefined); // new project
+            setSelectedProject(undefined);
             setIsModalOpen(true);
           }}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center"
@@ -94,7 +149,7 @@ const Projets: React.FC = () => {
         </button>
       </div>
 
-      {/* Project Stats */}
+      {/* Statistiques projets */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg shadow-md p-6 border border-gray-100 flex items-center">
           <div className="p-2 bg-blue-100 rounded-lg">
@@ -145,107 +200,114 @@ const Projets: React.FC = () => {
         </div>
       </div>
 
-      {/* Projects Grid */}
+      {/* Liste projets */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {projects.map(project => (
-          <div key={project.id} className="bg-white rounded-lg shadow-md border border-gray-100 p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-xl font-semibold text-gray-900">{project.name}</h3>
-                <p className="text-gray-600 text-sm">{project.description}</p>
-              </div>
-              <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(project.status)}`}>
-                {getStatusText(project.status)}
-              </span>
-            </div>
-
-            {/* Progress */}
-            <div className="mb-4">
-              <div className="flex justify-between text-sm text-gray-600 mb-2">
-                <span>Progression</span>
-                <span>{project.progress}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                  style={{ width: `${project.progress}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Dates */}
-            <div className="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-600">
-              <div>
-                <div className="flex items-center mb-1">
-                  <Calendar className="w-4 h-4 mr-1" />
-                  <span>Début</span>
+        {projects.map(project => {
+          const teamNames = getTeamMemberNames(project.team_members, users);
+          return (
+            <div key={project.id} className="bg-white rounded-lg shadow-md border border-gray-100 p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">{project.name}</h3>
+                  <p className="text-gray-600 text-sm">{project.description}</p>
                 </div>
-                <p className="font-medium text-gray-900">
-                  {project.start_date ? new Date(project.start_date).toLocaleDateString('fr-FR') : '-'}
-                </p>
+                <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(project.status)}`}>
+                  {getStatusText(project.status)}
+                </span>
               </div>
-              <div>
-                <div className="flex items-center mb-1">
-                  <Calendar className="w-4 h-4 mr-1" />
-                  <span>Fin prévue</span>
+
+              {/* Progression */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <span>Progression</span>
+                  <span>{project.progress}%</span>
                 </div>
-                <p className="font-medium text-gray-900">
-                  {project.end_date ? new Date(project.end_date).toLocaleDateString('fr-FR') : '-'}
-                </p>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${project.progress}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4 mb-4 text-sm text-gray-600">
+                <div>
+                  <div className="flex items-center mb-1">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    <span>Début</span>
+                  </div>
+                  <p className="font-medium text-gray-900">
+                    {project.start_date ? new Date(project.start_date).toLocaleDateString('fr-FR') : '-'}
+                  </p>
+                </div>
+                <div>
+                  <div className="flex items-center mb-1">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    <span>Fin prévue</span>
+                  </div>
+                  <p className="font-medium text-gray-900">
+                    {project.end_date ? new Date(project.end_date).toLocaleDateString('fr-FR') : '-'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Membres assignés */}
+              <div className="text-sm mb-4">
+                <strong>Membres assignés: </strong>
+                {teamNames.length > 0 ? teamNames.join(', ') : 'Aucun membre assigné'}
+              </div>
+
+              {/* Boutons modifier et supprimer */}
+              <div className="flex justify-between mt-4">
+                <button
+                  onClick={() => {
+                    setSelectedProject(project);
+                    setIsModalOpen(true);
+                  }}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  Modifier le projet →
+                </button>
+
+                <button
+                  onClick={() => handleDeleteProject(project.id)}
+                  disabled={loadingDelete === project.id}
+                  title="Supprimer le projet"
+                  className="text-red-600 hover:text-red-800 transition-colors flex items-center"
+                >
+                  {loadingDelete === project.id ? (
+                    <svg
+                      className="animate-spin h-5 w-5 text-red-600"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                      ></path>
+                    </svg>
+                  ) : (
+                    <Trash2 className="w-5 h-5" />
+                  )}
+                </button>
               </div>
             </div>
-
-            {/* Buttons container with edit and delete */}
-            {/* Buttons container with edit and delete */}
-<div className="flex justify-between mt-4">
-  <button
-    onClick={() => {
-      setSelectedProject(project);
-      setIsModalOpen(true);
-    }}
-    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-  >
-    Modifier le projet →
-  </button>
-
-  <button
-    onClick={() => handleDeleteProject(project.id)}
-    disabled={loadingDelete === project.id}
-    title="Supprimer le projet"
-    className="text-red-600 hover:text-red-800 transition-colors flex items-center"
-  >
-    {loadingDelete === project.id ? (
-      <svg
-        className="animate-spin h-5 w-5 text-red-600"
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-      >
-        <circle
-          className="opacity-25"
-          cx="12"
-          cy="12"
-          r="10"
-          stroke="currentColor"
-          strokeWidth="4"
-        ></circle>
-        <path
-          className="opacity-75"
-          fill="currentColor"
-          d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-        ></path>
-      </svg>
-    ) : (
-      <Trash2 className="w-5 h-5" />
-    )}
-  </button>
-</div>
-
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Project Modal */}
+      {/* Modal du projet */}
       <ProjectModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
