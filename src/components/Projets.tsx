@@ -11,17 +11,26 @@ interface Project {
   progress: number;
   start_date: string;
   end_date: string;
-  team_members: string[] | string;  // يمكن أن تكون مصفوفة أو نص JSON
+  team_members: string[] | string;
+  created_by: string;
 }
 
 const Projets: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [users, setUsers] = useState<{id: string; name: string}[]>([]);
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | undefined>(undefined);
   const [loadingDelete, setLoadingDelete] = useState<string | null>(null);
 
-  // جلب جميع المستخدمين من قاعدة البيانات (الأعضاء)
+  // جلب المستخدم الحالي (ID)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data?.user?.id ?? null);
+    });
+  }, []);
+
+  // جلب جميع المستخدمين
   const fetchUsers = async () => {
     try {
       const { data, error } = await supabase.from('users').select('id, name');
@@ -32,7 +41,7 @@ const Projets: React.FC = () => {
     }
   };
 
-  // جلب المشاريع وفك تشفير team_members إذا كانت نص JSON
+  // جلب المشاريع مع تحويل team_members من JSON لو كان نص
   const fetchProjects = async () => {
     try {
       const { data, error } = await supabase
@@ -59,15 +68,16 @@ const Projets: React.FC = () => {
     }
   };
 
+  // جلب المستخدمين والمشاريع عند التحميل
   useEffect(() => {
     fetchUsers();
     fetchProjects();
   }, []);
 
-  // دالة لجلب أسماء الأعضاء بناءً على team_members (مصفوفة أو نص)
+  // دالة لجلب أسماء أعضاء الفريق من IDs
   const getTeamMemberNames = (
     teamMembersField: string[] | string | undefined,
-    usersList: {id: string; name: string}[]
+    usersList: { id: string; name: string }[]
   ) => {
     if (!teamMembersField) return [];
 
@@ -93,7 +103,15 @@ const Projets: React.FC = () => {
       .map(u => u!.name);
   };
 
-  // ألوان الحالة ونصوصها
+  // دالة لجلب اسم منشئ المشروع
+  const getCreatorName = (creatorId: string | undefined) => {
+    if (!creatorId) return 'Inconnu';
+    if (creatorId === currentUserId) return 'Moi';
+    const user = users.find(u => u.id === creatorId);
+    return user ? user.name : 'Inconnu';
+  };
+
+  // ألوان الحالة والنص
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800';
@@ -210,6 +228,9 @@ const Projets: React.FC = () => {
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900">{project.name}</h3>
                   <p className="text-gray-600 text-sm">{project.description}</p>
+                  <p className="text-sm text-gray-500 mt-1 italic">
+                    Créé par: {getCreatorName(project.created_by)}
+                  </p>
                 </div>
                 <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(project.status)}`}>
                   {getStatusText(project.status)}
